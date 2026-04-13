@@ -1,20 +1,18 @@
 from dotenv import load_dotenv
 load_dotenv()
+
 import os
 import mysql.connector
-
 
 DB_CONFIG = {
     "host": os.environ.get("DB_HOST", "localhost"),
     "port": int(os.environ.get("DB_PORT", "3306")),
-    "user": os.environ.get("DB_USER", "root"),
-    "password": os.environ.get("DB_PASSWORD", "1234"),
+    "user": "root",
+    "password": "",
     "database": os.environ.get("DB_NAME", "fitness_tracker"),
 }
 
-
 def get_db(db_name=None):
-    """Return a connection to the MySQL database."""
     config = dict(DB_CONFIG)
     if db_name:
         config["database"] = db_name
@@ -22,9 +20,9 @@ def get_db(db_name=None):
 
 
 def init_db(db_name=None):
-    """Create all tables if they do not exist."""
     config_no_db = {k: v for k, v in DB_CONFIG.items() if k != "database"}
     target_db = db_name or DB_CONFIG["database"]
+
     conn = mysql.connector.connect(**config_no_db)
     cursor = conn.cursor()
     cursor.execute(f"CREATE DATABASE IF NOT EXISTS {target_db}")
@@ -34,6 +32,7 @@ def init_db(db_name=None):
     config = dict(DB_CONFIG)
     if db_name:
         config["database"] = db_name
+
     conn = mysql.connector.connect(**config)
     cursor = conn.cursor()
 
