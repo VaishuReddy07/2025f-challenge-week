@@ -1,5 +1,8 @@
+from dotenv import load_dotenv
+load_dotenv()
 import os
 import mysql.connector
+
 
 DB_CONFIG = {
     "host": os.environ.get("DB_HOST", "localhost"),

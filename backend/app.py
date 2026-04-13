@@ -60,6 +60,63 @@ def add_workout():
     return jsonify(workout), 201
 
 
+@app.route("/workouts/<int:workout_id>", methods=["GET"])
+def get_workout_detail(workout_id):
+    """Get a specific workout with all its exercises.
+    
+    Returns workout details plus all exercises with sets, reps, weight.
+    """
+    conn = get_db()
+    cursor = conn.cursor(dictionary=True)
+    
+    # Query to get workout with all its exercises using JOIN
+    cursor.execute("""
+        SELECT 
+            w.id,
+            w.date,
+            w.duration_min,
+            w.notes,
+            e.id as exercise_id,
+            e.name as exercise_name,
+            e.category,
+            we.sets,
+            we.reps,
+            we.weight_kg
+        FROM workouts w
+        LEFT JOIN workout_exercises we ON w.id = we.workout_id
+        LEFT JOIN exercises e ON we.exercise_id = e.id
+        WHERE w.id = %s
+    """, (workout_id,))
+    
+    rows = cursor.fetchall()
+    cursor.close()
+    conn.close()
+    
+    if not rows:
+        return jsonify({"error": "Workout not found"}), 404
+    
+    # Build the response
+    workout = {
+        "id": rows[0]["id"],
+        "date": str(rows[0]["date"]),  # Convert date to string
+        "duration_min": rows[0]["duration_min"],
+        "notes": rows[0]["notes"],
+        "exercises": []
+    }
+    
+    # Add exercises (skip if no exercises exist for this workout)
+    for row in rows:
+        if row["exercise_id"]:  
+            workout["exercises"].append({
+                "id": row["exercise_id"],
+                "name": row["exercise_name"],
+                "category": row["category"],
+                "sets": row["sets"],
+                "reps": row["reps"],
+                "weight_kg": float(row["weight_kg"]) if row["weight_kg"] else 0
+            })
+    
+    return jsonify(workout), 200
 # ---------------------------------------------------------------------------
 # TODO (students will implement these endpoints):
 #   GET  /workouts/<id>          — workout detail with exercises (JOIN)
