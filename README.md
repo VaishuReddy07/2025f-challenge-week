@@ -2,6 +2,11 @@
 
 A workout tracking application with a Python/Flask + MySQL backend and native mobile frontends (Android or iOS).
 
+##Group Members
+1. Janice Ngugi
+2. Vaishnavi Putta
+3. 
+
 ## Project structure
 
 ```
