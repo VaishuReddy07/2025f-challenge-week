@@ -180,25 +180,51 @@ def get_workout_detail(workout_id):
 # -------------------------------------------
 @app.route("/stats", methods=["GET"])
 def get_stats():
+    """Get aggregate workout statistics."""
     conn = get_db()
     cursor = conn.cursor(dictionary=True)
-
+    
+    # Get total workouts, total duration, and average duration
     cursor.execute("""
         SELECT 
-            COUNT(*) AS total_workouts,
-            SUM(duration_min) AS total_duration_min,
-            AVG(duration_min) AS avg_duration,
-            MAX(duration_min) AS max_duration,
-            MIN(duration_min) AS min_duration
+            COUNT(*) as total_workouts,
+            SUM(duration_min) as total_duration_min,
+            AVG(duration_min) as avg_duration_min
         FROM workouts
     """)
-
-    stats = cursor.fetchone()
-
+    
+    stats_result = cursor.fetchone()
+    
+    # Get workouts per category
+    cursor.execute("""
+        SELECT 
+            e.category,
+            COUNT(DISTINCT w.id) as workout_count
+        FROM workouts w
+        JOIN workout_exercises we ON w.id = we.workout_id
+        JOIN exercises e ON we.exercise_id = e.id
+        GROUP BY e.category
+        ORDER BY e.category
+    """)
+    
+    category_results = cursor.fetchall()
     cursor.close()
     conn.close()
-
-    return jsonify(stats)
+    
+    # Build workouts_per_category dictionary
+    workouts_per_category = {}
+    for row in category_results:
+        workouts_per_category[row["category"]] = row["workout_count"]
+    
+    # Build response with EXACT field names the test expects
+    response = {
+        "total_workouts": stats_result["total_workouts"] or 0,
+        "total_duration_min": stats_result["total_duration_min"] or 0,
+        "avg_duration_min": float(stats_result["avg_duration_min"]) if stats_result["avg_duration_min"] else 0,
+        "workouts_per_category": workouts_per_category
+    }
+    
+    return jsonify(response), 200
 
 
 # -------------------------------------------
