@@ -249,7 +249,7 @@ Example request body:
 
 
 # Collaborators
-1. Janice Ngugi
-2. Vaishnavi Putta
+1. Janice Ngugi (https://github.com/janicefoi)
+2. Vaishnavi Putta (https://github.com/VaishuReddy07)
 3. Iliyaz Mohammed
 
