@@ -2,11 +2,6 @@
 
 A workout tracking application with a Python/Flask + MySQL backend and native mobile frontends (Android or iOS).
 
-##Group Members
-1. Janice Ngugi
-2. Vaishnavi Putta
-3. 
-
 ## Project structure
 
 ```
@@ -251,3 +246,10 @@ Example request body:
 | FTRC-C028 | Security headers + rate limiting |
 | FTRC-C029 | Structured logging + alerting |
 | FTRC-C030 | Final 5-page audit report |
+
+
+# Collaborators
+1. Janice Ngugi
+2. Vaishnavi Putta
+3. Iliyaz Mohammed
+
