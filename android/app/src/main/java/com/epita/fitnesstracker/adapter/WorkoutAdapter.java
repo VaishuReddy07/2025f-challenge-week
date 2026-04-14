@@ -16,11 +16,20 @@ import java.util.List;
 
 public class WorkoutAdapter extends RecyclerView.Adapter<WorkoutAdapter.ViewHolder> {
 
+    public interface OnItemClickListener {
+        void onItemClick(Workout workout);
+    }
+
     private List<Workout> workouts = new ArrayList<>();
+    private OnItemClickListener listener;
 
     public void setWorkouts(List<Workout> workouts) {
         this.workouts = workouts;
         notifyDataSetChanged();
+    }
+
+    public void setOnItemClickListener(OnItemClickListener listener) {
+        this.listener = listener;
     }
 
     @NonNull
@@ -37,6 +46,11 @@ public class WorkoutAdapter extends RecyclerView.Adapter<WorkoutAdapter.ViewHold
         holder.tvDate.setText(workout.getDate());
         holder.tvDuration.setText(workout.getDurationMin() + " min");
         holder.tvNotes.setText(workout.getNotes());
+        holder.itemView.setOnClickListener(v -> {
+            if (listener != null) {
+                listener.onItemClick(workout);
+            }
+        });
     }
 
     @Override

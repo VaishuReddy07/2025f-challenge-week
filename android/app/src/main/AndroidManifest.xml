@@ -19,5 +19,7 @@
         </activity>
 
         <activity android:name=".WorkoutDetailActivity" />
+        <activity android:name=".CreateWorkoutActivity"
+            android:label="New Workout" />
     </application>
 </manifest>

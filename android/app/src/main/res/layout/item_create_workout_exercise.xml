@@ -1,0 +1,110 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.cardview.widget.CardView
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:layout_marginBottom="12dp"
+    app:cardCornerRadius="12dp"
+    app:cardElevation="3dp">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="16dp">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical">
+
+            <TextView
+                android:id="@+id/tvExName"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:textSize="18sp"
+                android:textStyle="bold"
+                android:textColor="@color/purple_500" />
+
+            <ImageButton
+                android:id="@+id/btnRemoveExercise"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:src="@android:drawable/ic_menu_delete"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                app:tint="@android:color/darker_gray" />
+        </LinearLayout>
+
+        <EditText
+            android:id="@+id/etExerciseNotes"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:hint="Exercise notes (e.g. focus on form)"
+            android:textSize="14sp"
+            android:layout_marginTop="4dp"
+            android:background="@android:color/transparent" />
+
+        <!-- Table Header -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:layout_marginTop="12dp"
+            android:paddingBottom="4dp">
+
+            <TextView android:layout_width="40dp" android:layout_height="wrap_content" android:text="SET" android:gravity="center" android:textSize="12sp" android:textStyle="bold" />
+            <TextView android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="REPS" android:gravity="center" android:textSize="12sp" android:textStyle="bold" />
+            <TextView android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="KG" android:gravity="center" android:textSize="12sp" android:textStyle="bold" />
+            <TextView android:layout_width="40dp" android:layout_height="wrap_content" android:text="DONE" android:gravity="center" android:textSize="10sp" android:textStyle="bold" />
+            <View android:layout_width="40dp" android:layout_height="wrap_content" />
+        </LinearLayout>
+
+        <!-- Container for Set Rows -->
+        <LinearLayout
+            android:id="@+id/llSetsContainer"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical" />
+
+        <Button
+            android:id="@+id/btnAddSet"
+            style="@style/Widget.MaterialComponents.Button.TextButton"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="+ Add Set"
+            android:layout_marginTop="8dp" />
+
+        <!-- Rest Timer Row (S035) -->
+        <LinearLayout
+            android:id="@+id/llRestTimer"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:visibility="gone"
+            android:layout_marginTop="8dp"
+            android:padding="8dp"
+            android:background="#F5F5F5">
+
+            <TextView
+                android:id="@+id/tvRestTimer"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="Rest Timer: 60s"
+                android:textStyle="bold" />
+
+            <Button
+                android:id="@+id/btnStartRest"
+                style="@style/Widget.MaterialComponents.Button.TextButton"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="START" />
+        </LinearLayout>
+
+    </LinearLayout>
+
+</androidx.cardview.widget.CardView>

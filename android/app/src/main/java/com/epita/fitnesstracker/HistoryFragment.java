@@ -1,11 +1,16 @@
 package com.epita.fitnesstracker;
 
+import static android.app.Activity.RESULT_OK;
+
+import android.content.Intent;
 import android.os.Bundle;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.Toast;
 
+import androidx.activity.result.ActivityResultLauncher;
+import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.fragment.app.Fragment;
@@ -25,6 +30,14 @@ import java.util.List;
 public class HistoryFragment extends Fragment {
 
     private WorkoutAdapter adapter;
+    private final ActivityResultLauncher<Intent> createWorkoutLauncher = registerForActivityResult(
+            new ActivityResultContracts.StartActivityForResult(),
+            result -> {
+                if (result.getResultCode() == RESULT_OK) {
+                    fetchWorkouts();
+                }
+            }
+    );
 
     @Nullable
     @Override
@@ -41,7 +54,17 @@ public class HistoryFragment extends Fragment {
         RecyclerView rv = view.findViewById(R.id.rvWorkouts);
         rv.setLayoutManager(new LinearLayoutManager(requireContext()));
         adapter = new WorkoutAdapter();
+        adapter.setOnItemClickListener(workout -> {
+            Intent intent = new Intent(requireContext(), WorkoutDetailActivity.class);
+            intent.putExtra("WORKOUT_ID", workout.getId());
+            startActivity(intent);
+        });
         rv.setAdapter(adapter);
+
+        view.findViewById(R.id.fabAddWorkout).setOnClickListener(v -> {
+            Intent intent = new Intent(requireContext(), CreateWorkoutActivity.class);
+            createWorkoutLauncher.launch(intent);
+        });
 
         fetchWorkouts();
     }
@@ -57,21 +80,27 @@ public class HistoryFragment extends Fragment {
                         JSONObject obj = arr.getJSONObject(i);
                         list.add(Workout.fromJson(obj));
                     }
-                    requireActivity().runOnUiThread(() -> adapter.setWorkouts(list));
+                    if (isAdded()) {
+                        requireActivity().runOnUiThread(() -> adapter.setWorkouts(list));
+                    }
                 } catch (Exception e) {
-                    requireActivity().runOnUiThread(() ->
-                            Toast.makeText(requireContext(),
-                                    "Parse error: " + e.getMessage(),
-                                    Toast.LENGTH_SHORT).show());
+                    if (isAdded()) {
+                        requireActivity().runOnUiThread(() ->
+                                Toast.makeText(requireContext(),
+                                        "Parse error: " + e.getMessage(),
+                                        Toast.LENGTH_SHORT).show());
+                    }
                 }
             }
 
             @Override
             public void onError(Exception e) {
-                requireActivity().runOnUiThread(() ->
-                        Toast.makeText(requireContext(),
-                                "Network error: " + e.getMessage(),
-                                Toast.LENGTH_SHORT).show());
+                if (isAdded()) {
+                    requireActivity().runOnUiThread(() ->
+                            Toast.makeText(requireContext(),
+                                    "Network error: " + e.getMessage(),
+                                    Toast.LENGTH_SHORT).show());
+                }
             }
         });
     }
