@@ -278,17 +278,32 @@ def admin_page():
 # -------------------------------------------
 @app.route("/workouts/<int:workout_id>", methods=["DELETE"])
 def delete_workout(workout_id):
+    """Delete a workout and all its associated exercises (transactional)."""
     conn = get_db()
     cursor = conn.cursor()
 
-    cursor.execute("DELETE FROM workout_exercises WHERE workout_id = %s", (workout_id,))
-    cursor.execute("DELETE FROM workouts WHERE id = %s", (workout_id,))
+    try:
+        # First delete all workout_exercises entries (child records)
+        cursor.execute("DELETE FROM workout_exercises WHERE workout_id = %s", (workout_id,))
+        
+        # Then delete the workout itself
+        cursor.execute("DELETE FROM workouts WHERE id = %s", (workout_id,))
 
-    conn.commit()
-    cursor.close()
-    conn.close()
-
-    return jsonify({"message": "Workout deleted"})
+        # Commit the transaction
+        conn.commit()
+        
+        return jsonify({"message": "Workout deleted successfully"}), 200
+    
+    except Exception as e:
+        # Rollback on error
+        conn.rollback()
+        cursor.close()
+        conn.close()
+        return jsonify({"error": f"Failed to delete workout: {str(e)}"}), 500
+    
+    finally:
+        cursor.close()
+        conn.close()
 
 
 # -------------------------------------------
