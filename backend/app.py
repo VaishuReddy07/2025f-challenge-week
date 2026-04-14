@@ -1,20 +1,18 @@
-import base64
-import pickle
-from flask import Flask, jsonify, request
+import os
+from flask import Flask, jsonify, request, escape
 from flask_cors import CORS
 
 from database import init_db, get_db
 from models import get_all_exercises, get_all_workouts, create_workout
 
 app = Flask(__name__)
-app.secret_key = "changeme"
-SECRET_KEY = "super-secret-key-123"
+app.secret_key = os.getenv("SECRET_KEY", "dev-key-change-in-production")
 CORS(app)
 
 
 @app.after_request
 def add_header(response):
-    response.headers["X-Powered-By"] = "Flask/2.3.2 Python/3.11"
+    response.headers["X-Content-Type-Options"] = "nosniff"
     return response
 
 
@@ -64,7 +62,10 @@ def list_workouts():
 # -------------------------------------------
 @app.route("/workouts", methods=["POST"])
 def add_workout():
-    data = request.get_json(force=True)
+    try:
+        data = request.get_json()
+    except Exception:
+        return jsonify({"error": "Invalid JSON"}), 400
 
     if not data or "date" not in data:
         return jsonify({"error": "Missing required field: date"}), 400
@@ -83,6 +84,8 @@ def add_workout():
     exercises = data.get("exercises", [])
 
     for ex in exercises:
+        if "exercise_id" not in ex:
+            continue
         cursor.execute(
             """
             INSERT INTO workout_exercises
@@ -91,7 +94,7 @@ def add_workout():
             """,
             (
                 workout_id,
-                ex["exercise_id"],
+                ex.get("exercise_id"),
                 ex.get("sets"),
                 ex.get("reps"),
                 ex.get("weight_kg"),
@@ -163,13 +166,17 @@ def get_workout_detail(workout_id):
 
     for row in rows:
         if row["exercise_id"]:
+            try:
+                weight = float(row["weight_kg"]) if row["weight_kg"] else 0
+            except (ValueError, TypeError):
+                weight = 0
             workout["exercises"].append({
                 "id": row["exercise_id"],
                 "name": row["exercise_name"],
                 "category": row["category"],
                 "sets": row["sets"],
                 "reps": row["reps"],
-                "weight_kg": float(row["weight_kg"]) if row["weight_kg"] else 0
+                "weight_kg": weight
             })
 
     return jsonify(workout), 200
@@ -267,7 +274,9 @@ def admin_page():
 
     html = "<html><body><h1>Admin Panel</h1>"
     for w in workouts:
-        html += f"<div><h3>{w['date']}</h3><p>{w['notes']}</p></div>"
+        safe_date = escape(str(w['date'])) if w['date'] else ""
+        safe_notes = escape(w['notes']) if w['notes'] else ""
+        html += f"<div><h3>{safe_date}</h3><p>{safe_notes}</p></div>"
     html += "</body></html>"
 
     return html
@@ -297,9 +306,7 @@ def delete_workout(workout_id):
     except Exception as e:
         # Rollback on error
         conn.rollback()
-        cursor.close()
-        conn.close()
-        return jsonify({"error": f"Failed to delete workout: {str(e)}"}), 500
+        return jsonify({"error": "Failed to delete workout"}), 500
     
     finally:
         cursor.close()
@@ -319,10 +326,18 @@ def update_workout(workout_id):
     fields = []
     values = []
 
+    # Whitelist allowed fields to prevent SQL injection
+    allowed_fields = {"date", "duration_min", "notes"}
+    
     for key, value in data.items():
+        if key not in allowed_fields:
+            continue
         fields.append(f"{key} = %s")
         values.append(value)
 
+    if not fields:
+        return jsonify({"error": "No valid fields to update"}), 400
+    
     values.append(workout_id)
 
     cursor.execute(
