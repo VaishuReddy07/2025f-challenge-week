@@ -1,5 +1,6 @@
 import os
-from flask import Flask, jsonify, request, escape
+from flask import Flask, jsonify, request
+from markupsafe import escape
 from flask_cors import CORS
 
 from database import init_db, get_db
