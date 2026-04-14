@@ -323,6 +323,115 @@ def update_workout(workout_id):
 
 
 # -------------------------------------------
+# MOST FREQUENT EXERCISE (JOIN + GROUP BY)
+# -------------------------------------------
+@app.route("/most-frequent-exercise", methods=["GET"])
+def get_most_frequent_exercise():
+    """Get the most frequently performed exercise using JOIN and GROUP BY."""
+    conn = get_db()
+    cursor = conn.cursor(dictionary=True)
+    
+    cursor.execute("""
+        SELECT 
+            e.id,
+            e.name,
+            e.category,
+            e.description,
+            COUNT(we.id) as frequency
+        FROM exercises e
+        JOIN workout_exercises we ON e.id = we.exercise_id
+        GROUP BY e.id, e.name, e.category, e.description
+        ORDER BY frequency DESC
+        LIMIT 1
+    """)
+    
+    result = cursor.fetchone()
+    cursor.close()
+    conn.close()
+    
+    if not result:
+        return jsonify({"error": "No exercises found"}), 404
+    
+    return jsonify({
+        "id": result["id"],
+        "name": result["name"],
+        "category": result["category"],
+        "description": result["description"],
+        "frequency": result["frequency"]
+    }), 200
+
+
+# -------------------------------------------
+# TOTAL VOLUME ACROSS ALL WORKOUTS
+# -------------------------------------------
+@app.route("/total-volume", methods=["GET"])
+def get_total_volume():
+    """Calculate total volume across all workouts (weight × reps × sets)."""
+    conn = get_db()
+    cursor = conn.cursor(dictionary=True)
+    
+    cursor.execute("""
+        SELECT 
+            SUM(COALESCE(weight_kg, 0) * COALESCE(reps, 0) * COALESCE(sets, 0)) as total_volume
+        FROM workout_exercises
+    """)
+    
+    result = cursor.fetchone()
+    cursor.close()
+    conn.close()
+    
+    total_volume = float(result["total_volume"]) if result["total_volume"] else 0.0
+    
+    return jsonify({
+        "total_volume": total_volume
+    }), 200
+
+
+# -------------------------------------------
+# WORKOUTS THIS WEEK
+# -------------------------------------------
+@app.route("/workouts/this-week", methods=["GET"])
+def get_workouts_this_week():
+    """Get all workouts from the current week."""
+    conn = get_db()
+    cursor = conn.cursor(dictionary=True)
+    
+    cursor.execute("""
+        SELECT * FROM workouts
+        WHERE YEARWEEK(date) = YEARWEEK(NOW())
+        ORDER BY date DESC
+    """)
+    
+    workouts = cursor.fetchall()
+    cursor.close()
+    conn.close()
+    
+    return jsonify(workouts), 200
+
+
+# -------------------------------------------
+# WORKOUTS THIS MONTH
+# -------------------------------------------
+@app.route("/workouts/this-month", methods=["GET"])
+def get_workouts_this_month():
+    """Get all workouts from the current month."""
+    conn = get_db()
+    cursor = conn.cursor(dictionary=True)
+    
+    cursor.execute("""
+        SELECT * FROM workouts
+        WHERE YEAR(date) = YEAR(NOW()) AND MONTH(date) = MONTH(NOW())
+        ORDER BY date DESC
+    """)
+    
+    workouts = cursor.fetchall()
+    cursor.close()
+    conn.close()
+    
+    return jsonify(workouts), 200
+
+
+# -------------------------------------------
 # IMPORT
 # -------------------------------------------
 @app.route("/workouts/import", methods=["POST"])
