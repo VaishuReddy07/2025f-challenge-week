@@ -540,6 +540,76 @@ def import_workouts():
 
 
 # -------------------------------------------
+# EXERCISE HISTORY
+# -------------------------------------------
+@app.route("/exercises/<int:exercise_id>/history", methods=["GET"])
+def get_exercise_history(exercise_id):
+    """Get the performance history of a specific exercise (all past performances)."""
+    conn = get_db()
+    cursor = conn.cursor(dictionary=True)
+    
+    # First, verify the exercise exists
+    cursor.execute("SELECT * FROM exercises WHERE id = %s", (exercise_id,))
+    exercise = cursor.fetchone()
+    
+    if not exercise:
+        cursor.close()
+        conn.close()
+        return jsonify({"error": "Exercise not found"}), 404
+    
+    # Get all instances of this exercise in workouts, ordered by date
+    cursor.execute("""
+        SELECT 
+            w.id as workout_id,
+            w.date,
+            w.duration_min,
+            w.notes,
+            we.sets,
+            we.reps,
+            we.weight_kg,
+            e.id as exercise_id,
+            e.name as exercise_name,
+            e.category,
+            e.description
+        FROM workouts w
+        JOIN workout_exercises we ON w.id = we.workout_id
+        JOIN exercises e ON we.exercise_id = e.id
+        WHERE e.id = %s
+        ORDER BY w.date DESC
+    """, (exercise_id,))
+    
+    rows = cursor.fetchall()
+    cursor.close()
+    conn.close()
+    
+    # Build response
+    history_entries = []
+    for row in rows:
+        try:
+            weight = float(row["weight_kg"]) if row["weight_kg"] else 0
+        except (ValueError, TypeError):
+            weight = 0
+        
+        history_entries.append({
+            "workout_id": row["workout_id"],
+            "date": str(row["date"]),
+            "duration_min": row["duration_min"],
+            "notes": row["notes"],
+            "sets": row["sets"],
+            "reps": row["reps"],
+            "weight_kg": weight
+        })
+    
+    return jsonify({
+        "exercise_id": exercise["id"],
+        "exercise_name": exercise["name"],
+        "category": exercise["category"],
+        "description": exercise["description"],
+        "history": history_entries
+    }), 200
+
+
+# -------------------------------------------
 # RUN
 # -------------------------------------------
 if __name__ == "__main__":
