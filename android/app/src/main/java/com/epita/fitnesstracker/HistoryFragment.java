@@ -8,6 +8,7 @@ import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.LinearLayout;
+import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.activity.result.ActivityResultLauncher;
@@ -21,6 +22,7 @@ import androidx.recyclerview.widget.RecyclerView;
 import com.epita.fitnesstracker.adapter.WorkoutAdapter;
 import com.epita.fitnesstracker.api.ApiClient;
 import com.epita.fitnesstracker.model.Workout;
+import com.google.android.material.chip.Chip;
 import com.google.android.material.chip.ChipGroup;
 
 import org.json.JSONArray;
@@ -39,6 +41,7 @@ public class HistoryFragment extends Fragment {
     private RecyclerView rvWorkouts;
     private LinearLayout llEmptyState;
     private ChipGroup chipGroupFilter;
+    private TextView tvWorkoutCount, tvEmptyMessage;
 
     private final ActivityResultLauncher<Intent> createWorkoutLauncher = registerForActivityResult(
             new ActivityResultContracts.StartActivityForResult(),
@@ -64,6 +67,8 @@ public class HistoryFragment extends Fragment {
         rvWorkouts = view.findViewById(R.id.rvWorkouts);
         llEmptyState = view.findViewById(R.id.llEmptyState);
         chipGroupFilter = view.findViewById(R.id.chipGroupFilter);
+        tvWorkoutCount = view.findViewById(R.id.tvWorkoutCount);
+        tvEmptyMessage = view.findViewById(R.id.tvEmptyMessage);
 
         rvWorkouts.setLayoutManager(new LinearLayoutManager(requireContext()));
         adapter = new WorkoutAdapter();
@@ -120,9 +125,19 @@ public class HistoryFragment extends Fragment {
                     if (isAdded()) {
                         requireActivity().runOnUiThread(() -> {
                             adapter.setWorkouts(list);
+                            tvWorkoutCount.setText(list.size() + " workouts");
+                            
                             if (list.isEmpty()) {
                                 rvWorkouts.setVisibility(View.GONE);
                                 llEmptyState.setVisibility(View.VISIBLE);
+                                
+                                // Update empty message based on filter
+                                if (checkedId == R.id.chipAll) {
+                                    tvEmptyMessage.setText("No workouts yet");
+                                } else {
+                                    Chip chip = chipGroupFilter.findViewById(checkedId);
+                                    tvEmptyMessage.setText("No workouts for " + chip.getText());
+                                }
                             } else {
                                 rvWorkouts.setVisibility(View.VISIBLE);
                                 llEmptyState.setVisibility(View.GONE);
