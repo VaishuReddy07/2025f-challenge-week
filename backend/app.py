@@ -1,20 +1,66 @@
 import base64
-import pickle
+import json
+import os
+import time
+from collections import defaultdict
+
+from dotenv import load_dotenv
 from flask import Flask, jsonify, request
+from markupsafe import escape
 from flask_cors import CORS
 
 from database import init_db, get_db
 from models import get_all_exercises, get_all_workouts, create_workout
 
+load_dotenv()
+
 app = Flask(__name__)
-app.secret_key = "changeme"
-SECRET_KEY = "super-secret-key-123"
+
+app.secret_key = os.getenv("SECRET_KEY")
+if not app.secret_key:
+    raise RuntimeError("SECRET_KEY environment variable must be set")
+
+API_KEY = os.getenv("API_KEY")
+if not API_KEY:
+    raise RuntimeError("API_KEY environment variable must be set")
+
+RATE_LIMIT_WINDOW = int(os.getenv("RATE_LIMIT_WINDOW", "60"))
+RATE_LIMIT_MAX_REQUESTS = int(os.getenv("RATE_LIMIT_MAX_REQUESTS", "100"))
+rate_limit_data = defaultdict(lambda: {"count": 0, "reset_at": time.time() + RATE_LIMIT_WINDOW})
+
 CORS(app)
+
+
+@app.before_request
+def enforce_security():
+    if request.method == "OPTIONS":
+        return None
+
+    client_ip = request.remote_addr or "unknown"
+    now = time.time()
+    entry = rate_limit_data[client_ip]
+
+    if now >= entry["reset_at"]:
+        entry["count"] = 0
+        entry["reset_at"] = now + RATE_LIMIT_WINDOW
+
+    entry["count"] += 1
+    if entry["count"] > RATE_LIMIT_MAX_REQUESTS:
+        return jsonify({"error": "Too many requests"}), 429
+
+    auth_header = request.headers.get("Authorization", "")
+    if not auth_header.startswith("Bearer "):
+        return jsonify({"error": "Authorization required"}), 401
+
+    token = auth_header.split(" ", 1)[1]
+    if token != API_KEY:
+        return jsonify({"error": "Unauthorized"}), 401
 
 
 @app.after_request
 def add_header(response):
-    response.headers["X-Powered-By"] = "Flask/2.3.2 Python/3.11"
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Powered-By"] = "FitnessTracker"
     return response
 
 
@@ -64,7 +110,10 @@ def list_workouts():
 # -------------------------------------------
 @app.route("/workouts", methods=["POST"])
 def add_workout():
-    data = request.get_json(force=True)
+    try:
+        data = request.get_json()
+    except Exception:
+        return jsonify({"error": "Invalid JSON"}), 400
 
     if not data or "date" not in data:
         return jsonify({"error": "Missing required field: date"}), 400
@@ -83,6 +132,8 @@ def add_workout():
     exercises = data.get("exercises", [])
 
     for ex in exercises:
+        if "exercise_id" not in ex:
+            continue
         cursor.execute(
             """
             INSERT INTO workout_exercises
@@ -91,7 +142,7 @@ def add_workout():
             """,
             (
                 workout_id,
-                ex["exercise_id"],
+                ex.get("exercise_id"),
                 ex.get("sets"),
                 ex.get("reps"),
                 ex.get("weight_kg"),
@@ -163,13 +214,17 @@ def get_workout_detail(workout_id):
 
     for row in rows:
         if row["exercise_id"]:
+            try:
+                weight = float(row["weight_kg"]) if row["weight_kg"] else 0
+            except (ValueError, TypeError):
+                weight = 0
             workout["exercises"].append({
                 "id": row["exercise_id"],
                 "name": row["exercise_name"],
                 "category": row["category"],
                 "sets": row["sets"],
                 "reps": row["reps"],
-                "weight_kg": float(row["weight_kg"]) if row["weight_kg"] else 0
+                "weight_kg": weight
             })
 
     return jsonify(workout), 200
@@ -267,7 +322,9 @@ def admin_page():
 
     html = "<html><body><h1>Admin Panel</h1>"
     for w in workouts:
-        html += f"<div><h3>{w['date']}</h3><p>{w['notes']}</p></div>"
+        safe_date = escape(str(w['date'])) if w['date'] else ""
+        safe_notes = escape(w['notes']) if w['notes'] else ""
+        html += f"<div><h3>{safe_date}</h3><p>{safe_notes}</p></div>"
     html += "</body></html>"
 
     return html
@@ -278,17 +335,30 @@ def admin_page():
 # -------------------------------------------
 @app.route("/workouts/<int:workout_id>", methods=["DELETE"])
 def delete_workout(workout_id):
+    """Delete a workout and all its associated exercises (transactional)."""
     conn = get_db()
     cursor = conn.cursor()
 
-    cursor.execute("DELETE FROM workout_exercises WHERE workout_id = %s", (workout_id,))
-    cursor.execute("DELETE FROM workouts WHERE id = %s", (workout_id,))
+    try:
+        # First delete all workout_exercises entries (child records)        GET http://localhost:5000/workouts?from=2026-01-01&to=2026-04-15
+        cursor.execute("DELETE FROM workout_exercises WHERE workout_id = %s", (workout_id,))
+        
+        # Then delete the workout itself
+        cursor.execute("DELETE FROM workouts WHERE id = %s", (workout_id,))
 
-    conn.commit()
-    cursor.close()
-    conn.close()
-
-    return jsonify({"message": "Workout deleted"})
+        # Commit the transaction
+        conn.commit()
+        
+        return jsonify({"message": "Workout deleted successfully"}), 200
+    
+    except Exception as e:
+        # Rollback on error
+        conn.rollback()
+        return jsonify({"error": "Failed to delete workout"}), 500
+    
+    finally:
+        cursor.close()
+        conn.close()
 
 
 # -------------------------------------------
@@ -297,16 +367,32 @@ def delete_workout(workout_id):
 @app.route("/workouts/<int:workout_id>", methods=["PATCH"])
 def update_workout(workout_id):
     data = request.get_json()
+    if not isinstance(data, dict) or not data:
+        return jsonify({"error": "Invalid request body"}), 400
+
+    allowed_fields = {"date", "duration_min", "notes"}
+    updates = {}
+
+    for key, value in data.items():
+        if key not in allowed_fields:
+            return jsonify({"error": f"Field not allowed: {key}"}), 400
+        updates[key] = value
+
+    if "duration_min" in updates and updates["duration_min"] is not None:
+        if not isinstance(updates["duration_min"], int):
+            return jsonify({"error": "duration_min must be an integer"}), 400
+
+    if "date" in updates and not isinstance(updates["date"], str):
+        return jsonify({"error": "date must be a string"}), 400
 
     conn = get_db()
     cursor = conn.cursor()
 
-    fields = []
-    values = []
+    fields = [f"{key} = %s" for key in updates.keys()]
+    values = list(updates.values())
 
-    for key, value in data.items():
-        fields.append(f"{key} = %s")
-        values.append(value)
+    if not fields:
+        return jsonify({"error": "No valid fields to update"}), 400
 
     values.append(workout_id)
 
@@ -323,20 +409,139 @@ def update_workout(workout_id):
 
 
 # -------------------------------------------
+# MOST FREQUENT EXERCISE (JOIN + GROUP BY)
+# -------------------------------------------
+@app.route("/most-frequent-exercise", methods=["GET"])
+def get_most_frequent_exercise():
+    """Get the most frequently performed exercise using JOIN and GROUP BY."""
+    conn = get_db()
+    cursor = conn.cursor(dictionary=True)
+    
+    cursor.execute("""
+        SELECT 
+            e.id,
+            e.name,
+            e.category,
+            e.description,
+            COUNT(we.id) as frequency
+        FROM exercises e
+        JOIN workout_exercises we ON e.id = we.exercise_id
+        GROUP BY e.id, e.name, e.category, e.description
+        ORDER BY frequency DESC
+        LIMIT 1
+    """)
+    
+    result = cursor.fetchone()
+    cursor.close()
+    conn.close()
+    
+    if not result:
+        return jsonify({"error": "No exercises found"}), 404
+    
+    return jsonify({
+        "id": result["id"],
+        "name": result["name"],
+        "category": result["category"],
+        "description": result["description"],
+        "frequency": result["frequency"]
+    }), 200
+
+
+# -------------------------------------------
+# TOTAL VOLUME ACROSS ALL WORKOUTS
+# -------------------------------------------
+@app.route("/total-volume", methods=["GET"])
+def get_total_volume():
+    """Calculate total volume across all workouts (weight × reps × sets)."""
+    conn = get_db()
+    cursor = conn.cursor(dictionary=True)
+    
+    cursor.execute("""
+        SELECT 
+            SUM(COALESCE(weight_kg, 0) * COALESCE(reps, 0) * COALESCE(sets, 0)) as total_volume
+        FROM workout_exercises
+    """)
+    
+    result = cursor.fetchone()
+    cursor.close()
+    conn.close()
+    
+    total_volume = float(result["total_volume"]) if result["total_volume"] else 0.0
+    
+    return jsonify({
+        "total_volume": total_volume
+    }), 200
+
+
+# -------------------------------------------
+# WORKOUTS THIS WEEK
+# -------------------------------------------
+@app.route("/workouts/this-week", methods=["GET"])
+def get_workouts_this_week():
+    """Get all workouts from the current week."""
+    conn = get_db()
+    cursor = conn.cursor(dictionary=True)
+    
+    cursor.execute("""
+        SELECT * FROM workouts
+        WHERE YEARWEEK(date) = YEARWEEK(NOW())
+        ORDER BY date DESC
+    """)
+    
+    workouts = cursor.fetchall()
+    cursor.close()
+    conn.close()
+    
+    return jsonify(workouts), 200
+
+
+# -------------------------------------------
+# WORKOUTS THIS MONTH
+# -------------------------------------------
+@app.route("/workouts/this-month", methods=["GET"])
+def get_workouts_this_month():
+    """Get all workouts from the current month."""
+    conn = get_db()
+    cursor = conn.cursor(dictionary=True)
+    
+    cursor.execute("""
+        SELECT * FROM workouts
+        WHERE YEAR(date) = YEAR(NOW()) AND MONTH(date) = MONTH(NOW())
+        ORDER BY date DESC
+    """)
+    
+    workouts = cursor.fetchall()
+    cursor.close()
+    conn.close()
+    
+    return jsonify(workouts), 200
+
+
+# -------------------------------------------
 # IMPORT
 # -------------------------------------------
 @app.route("/workouts/import", methods=["POST"])
 def import_workouts():
-    data = request.get_json()
+    data = request.get_json(force=True)
+    if not isinstance(data, dict) or "data" not in data:
+        return jsonify({"error": "Payload must include base64-encoded JSON data"}), 400
+
     payload = data.get("data", "")
+    try:
+        decoded = base64.b64decode(payload).decode("utf-8")
+        workout_data = json.loads(decoded)
+    except Exception:
+        return jsonify({"error": "Invalid import payload"}), 400
 
-    workout_data = pickle.loads(base64.b64decode(payload))
+    if not isinstance(workout_data, list):
+        return jsonify({"error": "Imported data must be a JSON array"}), 400
 
-    return jsonify({"message": f"Imported {len(workout_data)} workouts"})
+    return jsonify({"message": f"Imported {len(workout_data)} workouts"}), 200
 
 
 # -------------------------------------------
 # RUN
 # -------------------------------------------
 if __name__ == "__main__":
-    app.run(debug=True, port=5000)
+    debug_mode = os.getenv("FLASK_DEBUG", "False").lower() == "true"
+    app.run(debug=debug_mode, port=5000)
