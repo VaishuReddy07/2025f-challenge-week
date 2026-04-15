@@ -7,6 +7,7 @@ import android.os.Bundle;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.LinearLayout;
 import android.widget.Toast;
 
 import androidx.activity.result.ActivityResultLauncher;
@@ -30,6 +31,9 @@ import java.util.List;
 public class HistoryFragment extends Fragment {
 
     private WorkoutAdapter adapter;
+    private RecyclerView rvWorkouts;
+    private LinearLayout llEmptyState;
+
     private final ActivityResultLauncher<Intent> createWorkoutLauncher = registerForActivityResult(
             new ActivityResultContracts.StartActivityForResult(),
             result -> {
@@ -51,15 +55,17 @@ public class HistoryFragment extends Fragment {
     public void onViewCreated(@NonNull View view, @Nullable Bundle savedInstanceState) {
         super.onViewCreated(view, savedInstanceState);
 
-        RecyclerView rv = view.findViewById(R.id.rvWorkouts);
-        rv.setLayoutManager(new LinearLayoutManager(requireContext()));
+        rvWorkouts = view.findViewById(R.id.rvWorkouts);
+        llEmptyState = view.findViewById(R.id.llEmptyState);
+
+        rvWorkouts.setLayoutManager(new LinearLayoutManager(requireContext()));
         adapter = new WorkoutAdapter();
         adapter.setOnItemClickListener(workout -> {
             Intent intent = new Intent(requireContext(), WorkoutDetailActivity.class);
             intent.putExtra("WORKOUT_ID", workout.getId());
             startActivity(intent);
         });
-        rv.setAdapter(adapter);
+        rvWorkouts.setAdapter(adapter);
 
         view.findViewById(R.id.fabAddWorkout).setOnClickListener(v -> {
             Intent intent = new Intent(requireContext(), CreateWorkoutActivity.class);
@@ -81,7 +87,16 @@ public class HistoryFragment extends Fragment {
                         list.add(Workout.fromJson(obj));
                     }
                     if (isAdded()) {
-                        requireActivity().runOnUiThread(() -> adapter.setWorkouts(list));
+                        requireActivity().runOnUiThread(() -> {
+                            adapter.setWorkouts(list);
+                            if (list.isEmpty()) {
+                                rvWorkouts.setVisibility(View.GONE);
+                                llEmptyState.setVisibility(View.VISIBLE);
+                            } else {
+                                rvWorkouts.setVisibility(View.VISIBLE);
+                                llEmptyState.setVisibility(View.GONE);
+                            }
+                        });
                     }
                 } catch (Exception e) {
                     if (isAdded()) {
