@@ -21,18 +21,24 @@ import androidx.recyclerview.widget.RecyclerView;
 import com.epita.fitnesstracker.adapter.WorkoutAdapter;
 import com.epita.fitnesstracker.api.ApiClient;
 import com.epita.fitnesstracker.model.Workout;
+import com.google.android.material.chip.ChipGroup;
 
 import org.json.JSONArray;
 import org.json.JSONObject;
 
+import java.text.SimpleDateFormat;
 import java.util.ArrayList;
+import java.util.Calendar;
+import java.util.Date;
 import java.util.List;
+import java.util.Locale;
 
 public class HistoryFragment extends Fragment {
 
     private WorkoutAdapter adapter;
     private RecyclerView rvWorkouts;
     private LinearLayout llEmptyState;
+    private ChipGroup chipGroupFilter;
 
     private final ActivityResultLauncher<Intent> createWorkoutLauncher = registerForActivityResult(
             new ActivityResultContracts.StartActivityForResult(),
@@ -57,6 +63,7 @@ public class HistoryFragment extends Fragment {
 
         rvWorkouts = view.findViewById(R.id.rvWorkouts);
         llEmptyState = view.findViewById(R.id.llEmptyState);
+        chipGroupFilter = view.findViewById(R.id.chipGroupFilter);
 
         rvWorkouts.setLayoutManager(new LinearLayoutManager(requireContext()));
         adapter = new WorkoutAdapter();
@@ -67,6 +74,10 @@ public class HistoryFragment extends Fragment {
         });
         rvWorkouts.setAdapter(adapter);
 
+        chipGroupFilter.setOnCheckedStateChangeListener((group, checkedIds) -> {
+            fetchWorkouts();
+        });
+
         view.findViewById(R.id.fabAddWorkout).setOnClickListener(v -> {
             Intent intent = new Intent(requireContext(), CreateWorkoutActivity.class);
             createWorkoutLauncher.launch(intent);
@@ -76,7 +87,27 @@ public class HistoryFragment extends Fragment {
     }
 
     private void fetchWorkouts() {
-        ApiClient.get("/workouts", new ApiClient.Callback() {
+        int checkedId = chipGroupFilter.getCheckedChipId();
+        String query = "";
+
+        if (checkedId != R.id.chipAll) {
+            Calendar cal = Calendar.getInstance();
+            SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd", Locale.US);
+            String to = sdf.format(new Date());
+            
+            if (checkedId == R.id.chipWeek) {
+                cal.add(Calendar.DAY_OF_YEAR, -7);
+            } else if (checkedId == R.id.chipMonth) {
+                cal.add(Calendar.MONTH, -1);
+            } else if (checkedId == R.id.chip3Months) {
+                cal.add(Calendar.MONTH, -3);
+            }
+            
+            String from = sdf.format(cal.getTime());
+            query = "?from=" + from + "&to=" + to;
+        }
+
+        ApiClient.get("/workouts" + query, new ApiClient.Callback() {
             @Override
             public void onSuccess(String responseBody) {
                 try {
