@@ -1,4 +1,10 @@
+import base64
+import json
 import os
+import time
+from collections import defaultdict
+
+from dotenv import load_dotenv
 from flask import Flask, jsonify, request
 from markupsafe import escape
 from flask_cors import CORS
@@ -6,14 +12,55 @@ from flask_cors import CORS
 from database import init_db, get_db
 from models import get_all_exercises, get_all_workouts, create_workout
 
+load_dotenv()
+
 app = Flask(__name__)
-app.secret_key = os.getenv("SECRET_KEY", "dev-key-change-in-production")
+
+app.secret_key = os.getenv("SECRET_KEY")
+if not app.secret_key:
+    raise RuntimeError("SECRET_KEY environment variable must be set")
+
+API_KEY = os.getenv("API_KEY")
+if not API_KEY:
+    raise RuntimeError("API_KEY environment variable must be set")
+
+RATE_LIMIT_WINDOW = int(os.getenv("RATE_LIMIT_WINDOW", "60"))
+RATE_LIMIT_MAX_REQUESTS = int(os.getenv("RATE_LIMIT_MAX_REQUESTS", "100"))
+rate_limit_data = defaultdict(lambda: {"count": 0, "reset_at": time.time() + RATE_LIMIT_WINDOW})
+
 CORS(app)
+
+
+@app.before_request
+def enforce_security():
+    if request.method == "OPTIONS":
+        return None
+
+    client_ip = request.remote_addr or "unknown"
+    now = time.time()
+    entry = rate_limit_data[client_ip]
+
+    if now >= entry["reset_at"]:
+        entry["count"] = 0
+        entry["reset_at"] = now + RATE_LIMIT_WINDOW
+
+    entry["count"] += 1
+    if entry["count"] > RATE_LIMIT_MAX_REQUESTS:
+        return jsonify({"error": "Too many requests"}), 429
+
+    auth_header = request.headers.get("Authorization", "")
+    if not auth_header.startswith("Bearer "):
+        return jsonify({"error": "Authorization required"}), 401
+
+    token = auth_header.split(" ", 1)[1]
+    if token != API_KEY:
+        return jsonify({"error": "Unauthorized"}), 401
 
 
 @app.after_request
 def add_header(response):
     response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Powered-By"] = "FitnessTracker"
     return response
 
 
@@ -293,7 +340,7 @@ def delete_workout(workout_id):
     cursor = conn.cursor()
 
     try:
-        # First delete all workout_exercises entries (child records)
+        # First delete all workout_exercises entries (child records)        GET http://localhost:5000/workouts?from=2026-01-01&to=2026-04-15
         cursor.execute("DELETE FROM workout_exercises WHERE workout_id = %s", (workout_id,))
         
         # Then delete the workout itself
@@ -320,25 +367,33 @@ def delete_workout(workout_id):
 @app.route("/workouts/<int:workout_id>", methods=["PATCH"])
 def update_workout(workout_id):
     data = request.get_json()
+    if not isinstance(data, dict) or not data:
+        return jsonify({"error": "Invalid request body"}), 400
+
+    allowed_fields = {"date", "duration_min", "notes"}
+    updates = {}
+
+    for key, value in data.items():
+        if key not in allowed_fields:
+            return jsonify({"error": f"Field not allowed: {key}"}), 400
+        updates[key] = value
+
+    if "duration_min" in updates and updates["duration_min"] is not None:
+        if not isinstance(updates["duration_min"], int):
+            return jsonify({"error": "duration_min must be an integer"}), 400
+
+    if "date" in updates and not isinstance(updates["date"], str):
+        return jsonify({"error": "date must be a string"}), 400
 
     conn = get_db()
     cursor = conn.cursor()
 
-    fields = []
-    values = []
-
-    # Whitelist allowed fields to prevent SQL injection
-    allowed_fields = {"date", "duration_min", "notes"}
-    
-    for key, value in data.items():
-        if key not in allowed_fields:
-            continue
-        fields.append(f"{key} = %s")
-        values.append(value)
+    fields = [f"{key} = %s" for key in updates.keys()]
+    values = list(updates.values())
 
     if not fields:
         return jsonify({"error": "No valid fields to update"}), 400
-    
+
     values.append(workout_id)
 
     cursor.execute(
@@ -467,16 +522,26 @@ def get_workouts_this_month():
 # -------------------------------------------
 @app.route("/workouts/import", methods=["POST"])
 def import_workouts():
-    data = request.get_json()
+    data = request.get_json(force=True)
+    if not isinstance(data, dict) or "data" not in data:
+        return jsonify({"error": "Payload must include base64-encoded JSON data"}), 400
+
     payload = data.get("data", "")
+    try:
+        decoded = base64.b64decode(payload).decode("utf-8")
+        workout_data = json.loads(decoded)
+    except Exception:
+        return jsonify({"error": "Invalid import payload"}), 400
 
-    workout_data = pickle.loads(base64.b64decode(payload))
+    if not isinstance(workout_data, list):
+        return jsonify({"error": "Imported data must be a JSON array"}), 400
 
-    return jsonify({"message": f"Imported {len(workout_data)} workouts"})
+    return jsonify({"message": f"Imported {len(workout_data)} workouts"}), 200
 
 
 # -------------------------------------------
 # RUN
 # -------------------------------------------
 if __name__ == "__main__":
-    app.run(debug=True, port=5000)
+    debug_mode = os.getenv("FLASK_DEBUG", "False").lower() == "true"
+    app.run(debug=debug_mode, port=5000)
