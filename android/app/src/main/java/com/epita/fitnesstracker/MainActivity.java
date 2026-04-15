@@ -28,7 +28,10 @@ public class MainActivity extends AppCompatActivity {
                 fragment = new ExercisesFragment();
             } else if (id == R.id.nav_history) {
                 fragment = new HistoryFragment();
+            } else if (id == R.id.nav_stats) {
+                fragment = new StatsFragment();
             }
+
             if (fragment != null) {
                 loadFragment(fragment);
                 return true;

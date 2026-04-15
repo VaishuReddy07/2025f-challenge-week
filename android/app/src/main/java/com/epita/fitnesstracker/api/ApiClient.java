@@ -15,6 +15,7 @@ public class ApiClient {
 
     // Use 10.0.2.2 from the Android emulator to reach the host machine's localhost.
     private static final String BASE_URL = "http://10.0.2.2:5000";
+    private static final String API_KEY = "dev-api-key-change-in-production";
 
     public interface Callback {
         void onSuccess(String responseBody);
@@ -28,6 +29,7 @@ public class ApiClient {
                 URL url = new URL(BASE_URL + path);
                 HttpURLConnection conn = (HttpURLConnection) url.openConnection();
                 conn.setRequestMethod("GET");
+                conn.setRequestProperty("Authorization", "Bearer " + API_KEY);
                 conn.setConnectTimeout(5000);
                 conn.setReadTimeout(5000);
 
@@ -52,6 +54,7 @@ public class ApiClient {
                 HttpURLConnection conn = (HttpURLConnection) url.openConnection();
                 conn.setRequestMethod("POST");
                 conn.setRequestProperty("Content-Type", "application/json");
+                conn.setRequestProperty("Authorization", "Bearer " + API_KEY);
                 conn.setDoOutput(true);
                 conn.setConnectTimeout(5000);
                 conn.setReadTimeout(5000);
