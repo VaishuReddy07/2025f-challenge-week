@@ -24,47 +24,39 @@ public class ApiClient {
 
     /** Perform a GET request on a background thread. */
     public static void get(String path, Callback callback) {
-        new Thread(() -> {
-            try {
-                URL url = new URL(BASE_URL + path);
-                HttpURLConnection conn = (HttpURLConnection) url.openConnection();
-                conn.setRequestMethod("GET");
-                conn.setRequestProperty("Authorization", "Bearer " + API_KEY);
-                conn.setConnectTimeout(5000);
-                conn.setReadTimeout(5000);
-
-                int code = conn.getResponseCode();
-                if (code == 200) {
-                    callback.onSuccess(readStream(conn));
-                } else {
-                    callback.onError(new IOException("HTTP " + code));
-                }
-                conn.disconnect();
-            } catch (Exception e) {
-                callback.onError(e);
-            }
-        }).start();
+        request("GET", path, null, callback);
     }
 
     /** Perform a POST request with a JSON body on a background thread. */
     public static void post(String path, String jsonBody, Callback callback) {
+        request("POST", path, jsonBody, callback);
+    }
+
+    /** Perform a DELETE request on a background thread. */
+    public static void delete(String path, Callback callback) {
+        request("DELETE", path, null, callback);
+    }
+
+    private static void request(String method, String path, String body, Callback callback) {
         new Thread(() -> {
             try {
                 URL url = new URL(BASE_URL + path);
                 HttpURLConnection conn = (HttpURLConnection) url.openConnection();
-                conn.setRequestMethod("POST");
-                conn.setRequestProperty("Content-Type", "application/json");
+                conn.setRequestMethod(method);
                 conn.setRequestProperty("Authorization", "Bearer " + API_KEY);
-                conn.setDoOutput(true);
                 conn.setConnectTimeout(5000);
                 conn.setReadTimeout(5000);
 
-                OutputStream os = conn.getOutputStream();
-                os.write(jsonBody.getBytes("UTF-8"));
-                os.close();
+                if (body != null) {
+                    conn.setRequestProperty("Content-Type", "application/json");
+                    conn.setDoOutput(true);
+                    OutputStream os = conn.getOutputStream();
+                    os.write(body.getBytes("UTF-8"));
+                    os.close();
+                }
 
                 int code = conn.getResponseCode();
-                if (code == 200 || code == 201) {
+                if (code >= 200 && code < 300) {
                     callback.onSuccess(readStream(conn));
                 } else {
                     callback.onError(new IOException("HTTP " + code));
@@ -77,14 +69,28 @@ public class ApiClient {
     }
 
     private static String readStream(HttpURLConnection conn) throws IOException {
-        BufferedReader reader = new BufferedReader(
-                new InputStreamReader(conn.getInputStream()));
-        StringBuilder sb = new StringBuilder();
-        String line;
-        while ((line = reader.readLine()) != null) {
-            sb.append(line);
+        try (BufferedReader reader = new BufferedReader(
+                new InputStreamReader(conn.getInputStream()))) {
+            StringBuilder sb = new StringBuilder();
+            String line;
+            while ((line = reader.readLine()) != null) {
+                sb.append(line);
+            }
+            return sb.toString();
+        } catch (IOException e) {
+            // Handle error streams as well
+            if (conn.getErrorStream() != null) {
+                try (BufferedReader reader = new BufferedReader(
+                        new InputStreamReader(conn.getErrorStream()))) {
+                    StringBuilder sb = new StringBuilder();
+                    String line;
+                    while ((line = reader.readLine()) != null) {
+                        sb.append(line);
+                    }
+                    return sb.toString();
+                }
+            }
+            throw e;
         }
-        reader.close();
-        return sb.toString();
     }
 }

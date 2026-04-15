@@ -1,10 +1,12 @@
 package com.epita.fitnesstracker;
 
 import android.os.Bundle;
+import android.view.Menu;
 import android.view.MenuItem;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.appcompat.widget.Toolbar;
 import androidx.recyclerview.widget.LinearLayoutManager;
@@ -25,6 +27,7 @@ public class WorkoutDetailActivity extends AppCompatActivity {
 
     private TextView tvDate, tvDuration, tvVolume, tvNotes;
     private WorkoutExerciseAdapter adapter;
+    private int workoutId;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -48,7 +51,7 @@ public class WorkoutDetailActivity extends AppCompatActivity {
         adapter = new WorkoutExerciseAdapter();
         rv.setAdapter(adapter);
 
-        int workoutId = getIntent().getIntExtra("WORKOUT_ID", -1);
+        workoutId = getIntent().getIntExtra("WORKOUT_ID", -1);
         if (workoutId != -1) {
             fetchWorkoutDetail(workoutId);
         } else {
@@ -58,12 +61,49 @@ public class WorkoutDetailActivity extends AppCompatActivity {
     }
 
     @Override
+    public boolean onCreateOptionsMenu(Menu menu) {
+        getMenuInflater().inflate(R.menu.menu_workout_detail, menu);
+        return true;
+    }
+
+    @Override
     public boolean onOptionsItemSelected(MenuItem item) {
         if (item.getItemId() == android.R.id.home) {
             finish();
             return true;
+        } else if (item.getItemId() == R.id.action_delete) {
+            confirmDelete();
+            return true;
         }
         return super.onOptionsItemSelected(item);
+    }
+
+    private void confirmDelete() {
+        new AlertDialog.Builder(this)
+                .setTitle("Delete Workout")
+                .setMessage("Are you sure you want to delete this workout?")
+                .setPositiveButton("Delete", (dialog, which) -> deleteWorkout())
+                .setNegativeButton("Cancel", null)
+                .show();
+    }
+
+    private void deleteWorkout() {
+        ApiClient.delete("/workouts/" + workoutId, new ApiClient.Callback() {
+            @Override
+            public void onSuccess(String responseBody) {
+                runOnUiThread(() -> {
+                    Toast.makeText(WorkoutDetailActivity.this, "Workout deleted", Toast.LENGTH_SHORT).show();
+                    setResult(RESULT_OK); // Signal HistoryFragment to refresh
+                    finish();
+                });
+            }
+
+            @Override
+            public void onError(Exception e) {
+                runOnUiThread(() ->
+                        Toast.makeText(WorkoutDetailActivity.this, "Error deleting workout", Toast.LENGTH_SHORT).show());
+            }
+        });
     }
 
     private void fetchWorkoutDetail(int id) {
@@ -91,7 +131,7 @@ public class WorkoutDetailActivity extends AppCompatActivity {
                         tvDate.setText(date);
                         tvDuration.setText(String.format(Locale.getDefault(), "%d min", duration));
                         tvNotes.setText(notes);
-                        tvVolume.setText(String.format(Locale.getDefault(), "%.1f kg", finalVolume));
+                        tvVolume.setText(String.format(Locale.getDefault(), "Total Volume: %.1f kg", finalVolume));
                         adapter.setExercises(exercises);
                     });
 
