@@ -11,4 +11,9 @@
         android:icon="@android:drawable/ic_menu_recent_history"
         android:title="History" />
 
+    <item
+        android:id="@+id/nav_stats"
+        android:icon="@android:drawable/ic_menu_compass"
+        android:title="Stats" />
+
 </menu>

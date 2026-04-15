@@ -7,6 +7,8 @@ import android.os.Bundle;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.LinearLayout;
+import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.activity.result.ActivityResultLauncher;
@@ -20,16 +22,27 @@ import androidx.recyclerview.widget.RecyclerView;
 import com.epita.fitnesstracker.adapter.WorkoutAdapter;
 import com.epita.fitnesstracker.api.ApiClient;
 import com.epita.fitnesstracker.model.Workout;
+import com.google.android.material.chip.Chip;
+import com.google.android.material.chip.ChipGroup;
 
 import org.json.JSONArray;
 import org.json.JSONObject;
 
+import java.text.SimpleDateFormat;
 import java.util.ArrayList;
+import java.util.Calendar;
+import java.util.Date;
 import java.util.List;
+import java.util.Locale;
 
 public class HistoryFragment extends Fragment {
 
     private WorkoutAdapter adapter;
+    private RecyclerView rvWorkouts;
+    private LinearLayout llEmptyState;
+    private ChipGroup chipGroupFilter;
+    private TextView tvWorkoutCount, tvEmptyMessage;
+
     private final ActivityResultLauncher<Intent> createWorkoutLauncher = registerForActivityResult(
             new ActivityResultContracts.StartActivityForResult(),
             result -> {
@@ -51,15 +64,24 @@ public class HistoryFragment extends Fragment {
     public void onViewCreated(@NonNull View view, @Nullable Bundle savedInstanceState) {
         super.onViewCreated(view, savedInstanceState);
 
-        RecyclerView rv = view.findViewById(R.id.rvWorkouts);
-        rv.setLayoutManager(new LinearLayoutManager(requireContext()));
+        rvWorkouts = view.findViewById(R.id.rvWorkouts);
+        llEmptyState = view.findViewById(R.id.llEmptyState);
+        chipGroupFilter = view.findViewById(R.id.chipGroupFilter);
+        tvWorkoutCount = view.findViewById(R.id.tvWorkoutCount);
+        tvEmptyMessage = view.findViewById(R.id.tvEmptyMessage);
+
+        rvWorkouts.setLayoutManager(new LinearLayoutManager(requireContext()));
         adapter = new WorkoutAdapter();
         adapter.setOnItemClickListener(workout -> {
             Intent intent = new Intent(requireContext(), WorkoutDetailActivity.class);
             intent.putExtra("WORKOUT_ID", workout.getId());
             startActivity(intent);
         });
-        rv.setAdapter(adapter);
+        rvWorkouts.setAdapter(adapter);
+
+        chipGroupFilter.setOnCheckedStateChangeListener((group, checkedIds) -> {
+            fetchWorkouts();
+        });
 
         view.findViewById(R.id.fabAddWorkout).setOnClickListener(v -> {
             Intent intent = new Intent(requireContext(), CreateWorkoutActivity.class);
@@ -70,7 +92,27 @@ public class HistoryFragment extends Fragment {
     }
 
     private void fetchWorkouts() {
-        ApiClient.get("/workouts", new ApiClient.Callback() {
+        int checkedId = chipGroupFilter.getCheckedChipId();
+        String query = "";
+
+        if (checkedId != R.id.chipAll) {
+            Calendar cal = Calendar.getInstance();
+            SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd", Locale.US);
+            String to = sdf.format(new Date());
+            
+            if (checkedId == R.id.chipWeek) {
+                cal.add(Calendar.DAY_OF_YEAR, -7);
+            } else if (checkedId == R.id.chipMonth) {
+                cal.add(Calendar.MONTH, -1);
+            } else if (checkedId == R.id.chip3Months) {
+                cal.add(Calendar.MONTH, -3);
+            }
+            
+            String from = sdf.format(cal.getTime());
+            query = "?from=" + from + "&to=" + to;
+        }
+
+        ApiClient.get("/workouts" + query, new ApiClient.Callback() {
             @Override
             public void onSuccess(String responseBody) {
                 try {
@@ -81,7 +123,26 @@ public class HistoryFragment extends Fragment {
                         list.add(Workout.fromJson(obj));
                     }
                     if (isAdded()) {
-                        requireActivity().runOnUiThread(() -> adapter.setWorkouts(list));
+                        requireActivity().runOnUiThread(() -> {
+                            adapter.setWorkouts(list);
+                            tvWorkoutCount.setText(list.size() + " workouts");
+                            
+                            if (list.isEmpty()) {
+                                rvWorkouts.setVisibility(View.GONE);
+                                llEmptyState.setVisibility(View.VISIBLE);
+                                
+                                // Update empty message based on filter
+                                if (checkedId == R.id.chipAll) {
+                                    tvEmptyMessage.setText("No workouts yet");
+                                } else {
+                                    Chip chip = chipGroupFilter.findViewById(checkedId);
+                                    tvEmptyMessage.setText("No workouts for " + chip.getText());
+                                }
+                            } else {
+                                rvWorkouts.setVisibility(View.VISIBLE);
+                                llEmptyState.setVisibility(View.GONE);
+                            }
+                        });
                     }
                 } catch (Exception e) {
                     if (isAdded()) {

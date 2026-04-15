@@ -14,8 +14,6 @@ public class WorkoutExercise {
 
     public static WorkoutExercise fromJson(JSONObject json) throws JSONException {
         WorkoutExercise we = new WorkoutExercise();
-        // The API might return 'exercise_id' or 'id' depending on the JOIN.
-        // Based on TODO 1, it's a JOIN across workouts, workout_exercises, and exercises.
         we.id = json.optInt("id");
         we.exerciseId = json.optInt("exercise_id");
         we.name = json.getString("name");
