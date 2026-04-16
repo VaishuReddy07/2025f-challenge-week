@@ -16,16 +16,22 @@ import androidx.recyclerview.widget.RecyclerView;
 import com.epita.fitnesstracker.adapter.ExerciseAdapter;
 import com.epita.fitnesstracker.api.ApiClient;
 import com.epita.fitnesstracker.model.Exercise;
+import com.google.android.material.chip.Chip;
+import com.google.android.material.chip.ChipGroup;
 
 import org.json.JSONArray;
 import org.json.JSONObject;
 
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 public class ExercisesFragment extends Fragment {
 
     private ExerciseAdapter adapter;
+    private ChipGroup cgCategories;
+    private final List<Exercise> allExercises = new ArrayList<>();
 
     @Nullable
     @Override
@@ -39,6 +45,7 @@ public class ExercisesFragment extends Fragment {
     public void onViewCreated(@NonNull View view, @Nullable Bundle savedInstanceState) {
         super.onViewCreated(view, savedInstanceState);
 
+        cgCategories = view.findViewById(R.id.cgExerciseCategories);
         RecyclerView rv = view.findViewById(R.id.rvExercises);
         rv.setLayoutManager(new LinearLayoutManager(requireContext()));
         adapter = new ExerciseAdapter();
@@ -51,6 +58,8 @@ public class ExercisesFragment extends Fragment {
         });
         rv.setAdapter(adapter);
 
+        cgCategories.setOnCheckedStateChangeListener((group, checkedIds) -> filterExercises());
+
         fetchExercises();
     }
 
@@ -60,13 +69,20 @@ public class ExercisesFragment extends Fragment {
             public void onSuccess(String responseBody) {
                 try {
                     JSONArray arr = new JSONArray(responseBody);
-                    List<Exercise> list = new ArrayList<>();
+                    allExercises.clear();
+                    Set<String> categories = new HashSet<>();
+                    
                     for (int i = 0; i < arr.length(); i++) {
-                        JSONObject obj = arr.getJSONObject(i);
-                        list.add(Exercise.fromJson(obj));
+                        Exercise ex = Exercise.fromJson(arr.getJSONObject(i));
+                        allExercises.add(ex);
+                        categories.add(ex.getCategory());
                     }
+                    
                     if (isAdded()) {
-                        requireActivity().runOnUiThread(() -> adapter.setExercises(list));
+                        requireActivity().runOnUiThread(() -> {
+                            setupCategoryChips(categories);
+                            adapter.setExercises(allExercises);
+                        });
                     }
                 } catch (Exception e) {
                     if (isAdded()) {
@@ -88,5 +104,45 @@ public class ExercisesFragment extends Fragment {
                 }
             }
         });
+    }
+
+    private void setupCategoryChips(Set<String> categories) {
+        // Clear existing except "All"
+        int childCount = cgCategories.getChildCount();
+        for (int i = childCount - 1; i >= 0; i--) {
+            View child = cgCategories.getChildAt(i);
+            if (child.getId() != R.id.chipAllExercises) {
+                cgCategories.removeView(child);
+            }
+        }
+
+        for (String category : categories) {
+            Chip chip = new Chip(requireContext());
+            chip.setText(category);
+            chip.setCheckable(true);
+            chip.setClickable(true);
+            cgCategories.addView(chip);
+        }
+    }
+
+    private void filterExercises() {
+        int checkedId = cgCategories.getCheckedChipId();
+        if (checkedId == R.id.chipAllExercises || checkedId == View.NO_ID) {
+            adapter.setExercises(allExercises);
+            return;
+        }
+
+        Chip selectedChip = cgCategories.findViewById(checkedId);
+        if (selectedChip == null) return;
+
+        String category = selectedChip.getText().toString();
+        
+        List<Exercise> filtered = new ArrayList<>();
+        for (Exercise ex : allExercises) {
+            if (ex.getCategory().equals(category)) {
+                filtered.add(ex);
+            }
+        }
+        adapter.setExercises(filtered);
     }
 }
