@@ -1,5 +1,6 @@
 package com.epita.fitnesstracker;
 
+import android.content.Intent;
 import android.os.Bundle;
 import android.view.LayoutInflater;
 import android.view.View;
@@ -11,20 +12,28 @@ import androidx.annotation.Nullable;
 import androidx.fragment.app.Fragment;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
+import androidx.swiperefreshlayout.widget.SwipeRefreshLayout;
 
 import com.epita.fitnesstracker.adapter.ExerciseAdapter;
 import com.epita.fitnesstracker.api.ApiClient;
 import com.epita.fitnesstracker.model.Exercise;
+import com.google.android.material.chip.Chip;
+import com.google.android.material.chip.ChipGroup;
 
 import org.json.JSONArray;
 import org.json.JSONObject;
 
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 public class ExercisesFragment extends Fragment {
 
     private ExerciseAdapter adapter;
+    private ChipGroup cgCategories;
+    private SwipeRefreshLayout swipeRefresh;
+    private final List<Exercise> allExercises = new ArrayList<>();
 
     @Nullable
     @Override
@@ -38,41 +47,121 @@ public class ExercisesFragment extends Fragment {
     public void onViewCreated(@NonNull View view, @Nullable Bundle savedInstanceState) {
         super.onViewCreated(view, savedInstanceState);
 
+        swipeRefresh = view.findViewById(R.id.swipeRefreshExercises);
+        cgCategories = view.findViewById(R.id.cgExerciseCategories);
         RecyclerView rv = view.findViewById(R.id.rvExercises);
+        
         rv.setLayoutManager(new LinearLayoutManager(requireContext()));
         adapter = new ExerciseAdapter();
+        adapter.setOnItemClickListener(exercise -> {
+            Intent intent = new Intent(requireContext(), ExerciseHistoryActivity.class);
+            intent.putExtra("EXERCISE_ID", exercise.getId());
+            intent.putExtra("EXERCISE_NAME", exercise.getName());
+            intent.putExtra("EXERCISE_CATEGORY", exercise.getCategory());
+            startActivity(intent);
+        });
         rv.setAdapter(adapter);
+
+        cgCategories.setOnCheckedStateChangeListener((group, checkedIds) -> filterExercises());
+        
+        swipeRefresh.setOnRefreshListener(this::fetchExercises);
 
         fetchExercises();
     }
 
     private void fetchExercises() {
+        if (swipeRefresh != null) swipeRefresh.setRefreshing(true);
+        
         ApiClient.get("/exercises", new ApiClient.Callback() {
             @Override
             public void onSuccess(String responseBody) {
                 try {
                     JSONArray arr = new JSONArray(responseBody);
-                    List<Exercise> list = new ArrayList<>();
+                    allExercises.clear();
+                    Set<String> categories = new HashSet<>();
+                    
                     for (int i = 0; i < arr.length(); i++) {
-                        JSONObject obj = arr.getJSONObject(i);
-                        list.add(Exercise.fromJson(obj));
+                        Exercise ex = Exercise.fromJson(arr.getJSONObject(i));
+                        allExercises.add(ex);
+                        categories.add(ex.getCategory());
                     }
-                    requireActivity().runOnUiThread(() -> adapter.setExercises(list));
+                    
+                    if (isAdded()) {
+                        requireActivity().runOnUiThread(() -> {
+                            swipeRefresh.setRefreshing(false);
+                            setupCategoryChips(categories);
+                            filterExercises(); // Re-apply existing filter
+                        });
+                    }
                 } catch (Exception e) {
-                    requireActivity().runOnUiThread(() ->
-                            Toast.makeText(requireContext(),
-                                    "Parse error: " + e.getMessage(),
-                                    Toast.LENGTH_SHORT).show());
+                    if (isAdded()) {
+                        requireActivity().runOnUiThread(() -> {
+                            swipeRefresh.setRefreshing(false);
+                            Toast.makeText(requireContext(), "Parse error: " + e.getMessage(), Toast.LENGTH_SHORT).show();
+                        });
+                    }
                 }
             }
 
             @Override
             public void onError(Exception e) {
-                requireActivity().runOnUiThread(() ->
-                        Toast.makeText(requireContext(),
-                                "Network error: " + e.getMessage(),
-                                Toast.LENGTH_SHORT).show());
+                if (isAdded()) {
+                    requireActivity().runOnUiThread(() -> {
+                        swipeRefresh.setRefreshing(false);
+                        Toast.makeText(requireContext(), "Network error: " + e.getMessage(), Toast.LENGTH_SHORT).show();
+                    });
+                }
             }
         });
+    }
+
+    private void setupCategoryChips(Set<String> categories) {
+        int checkedId = cgCategories.getCheckedChipId();
+        
+        // Clear existing except "All"
+        int childCount = cgCategories.getChildCount();
+        for (int i = childCount - 1; i >= 0; i--) {
+            View child = cgCategories.getChildAt(i);
+            if (child.getId() != R.id.chipAllExercises) {
+                cgCategories.removeView(child);
+            }
+        }
+
+        for (String category : categories) {
+            Chip chip = new Chip(requireContext());
+            chip.setText(category);
+            chip.setCheckable(true);
+            chip.setClickable(true);
+            cgCategories.addView(chip);
+        }
+        
+        // Try to restore previous selection if it still exists
+        if (checkedId != View.NO_ID) {
+            cgCategories.check(checkedId);
+        }
+    }
+
+    private void filterExercises() {
+        int checkedId = cgCategories.getCheckedChipId();
+        if (checkedId == R.id.chipAllExercises || checkedId == View.NO_ID) {
+            adapter.setExercises(allExercises);
+            return;
+        }
+
+        Chip selectedChip = cgCategories.findViewById(checkedId);
+        if (selectedChip == null) {
+            adapter.setExercises(allExercises);
+            return;
+        }
+
+        String category = selectedChip.getText().toString();
+        
+        List<Exercise> filtered = new ArrayList<>();
+        for (Exercise ex : allExercises) {
+            if (ex.getCategory().equals(category)) {
+                filtered.add(ex);
+            }
+        }
+        adapter.setExercises(filtered);
     }
 }

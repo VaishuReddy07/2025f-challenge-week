@@ -4,6 +4,7 @@ import static android.app.Activity.RESULT_OK;
 
 import android.content.Intent;
 import android.os.Bundle;
+import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
@@ -20,6 +21,7 @@ import androidx.fragment.app.Fragment;
 import androidx.recyclerview.widget.ItemTouchHelper;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
+import androidx.swiperefreshlayout.widget.SwipeRefreshLayout;
 
 import com.epita.fitnesstracker.adapter.WorkoutAdapter;
 import com.epita.fitnesstracker.api.ApiClient;
@@ -39,11 +41,13 @@ import java.util.Locale;
 
 public class HistoryFragment extends Fragment {
 
+    private static final String TAG = "HistoryFragment";
     private WorkoutAdapter adapter;
     private RecyclerView rvWorkouts;
     private LinearLayout llEmptyState;
     private ChipGroup chipGroupFilter;
     private TextView tvWorkoutCount, tvEmptyMessage;
+    private SwipeRefreshLayout swipeRefresh;
 
     private final ActivityResultLauncher<Intent> createWorkoutLauncher = registerForActivityResult(
             new ActivityResultContracts.StartActivityForResult(),
@@ -66,6 +70,7 @@ public class HistoryFragment extends Fragment {
     public void onViewCreated(@NonNull View view, @Nullable Bundle savedInstanceState) {
         super.onViewCreated(view, savedInstanceState);
 
+        swipeRefresh = view.findViewById(R.id.swipeRefreshHistory);
         rvWorkouts = view.findViewById(R.id.rvWorkouts);
         llEmptyState = view.findViewById(R.id.llEmptyState);
         chipGroupFilter = view.findViewById(R.id.chipGroupFilter);
@@ -81,12 +86,11 @@ public class HistoryFragment extends Fragment {
         });
         rvWorkouts.setAdapter(adapter);
 
-        // Setup Swipe-to-delete
         setupSwipeToDelete();
 
-        chipGroupFilter.setOnCheckedStateChangeListener((group, checkedIds) -> {
-            fetchWorkouts();
-        });
+        chipGroupFilter.setOnCheckedStateChangeListener((group, checkedIds) -> fetchWorkouts());
+        
+        swipeRefresh.setOnRefreshListener(this::fetchWorkouts);
 
         view.findViewById(R.id.fabAddWorkout).setOnClickListener(v -> {
             Intent intent = new Intent(requireContext(), CreateWorkoutActivity.class);
@@ -149,14 +153,19 @@ public class HistoryFragment extends Fragment {
 
     private void updateCountLabel() {
         int count = adapter.getItemCount();
-        tvWorkoutCount.setText(count + " workouts");
+        tvWorkoutCount.setText(String.format(Locale.getDefault(), "%d workouts", count));
         if (count == 0) {
             rvWorkouts.setVisibility(View.GONE);
             llEmptyState.setVisibility(View.VISIBLE);
+        } else {
+            rvWorkouts.setVisibility(View.VISIBLE);
+            llEmptyState.setVisibility(View.GONE);
         }
     }
 
     private void fetchWorkouts() {
+        if (swipeRefresh != null) swipeRefresh.setRefreshing(true);
+        
         int checkedId = chipGroupFilter.getCheckedChipId();
         String query = "";
 
@@ -189,26 +198,28 @@ public class HistoryFragment extends Fragment {
                     }
                     if (isAdded()) {
                         requireActivity().runOnUiThread(() -> {
+                            if (swipeRefresh != null) swipeRefresh.setRefreshing(false);
                             adapter.setWorkouts(list);
                             updateCountLabel();
                             
                             if (list.isEmpty()) {
-                                // Update empty message based on filter
                                 if (checkedId == R.id.chipAll || checkedId == View.NO_ID) {
                                     tvEmptyMessage.setText("No workouts yet");
                                 } else {
                                     Chip chip = chipGroupFilter.findViewById(checkedId);
-                                    tvEmptyMessage.setText("No workouts for " + chip.getText());
+                                    if (chip != null) {
+                                        tvEmptyMessage.setText(String.format(Locale.getDefault(), "No workouts for %s", chip.getText()));
+                                    }
                                 }
                             }
                         });
                     }
                 } catch (Exception e) {
                     if (isAdded()) {
-                        requireActivity().runOnUiThread(() ->
-                                Toast.makeText(requireContext(),
-                                        "Parse error: " + e.getMessage(),
-                                        Toast.LENGTH_SHORT).show());
+                        requireActivity().runOnUiThread(() -> {
+                            if (swipeRefresh != null) swipeRefresh.setRefreshing(false);
+                            Toast.makeText(requireContext(), "Parse error: " + e.getMessage(), Toast.LENGTH_SHORT).show();
+                        });
                     }
                 }
             }
@@ -216,10 +227,10 @@ public class HistoryFragment extends Fragment {
             @Override
             public void onError(Exception e) {
                 if (isAdded()) {
-                    requireActivity().runOnUiThread(() ->
-                            Toast.makeText(requireContext(),
-                                    "Network error: " + e.getMessage(),
-                                    Toast.LENGTH_SHORT).show());
+                    requireActivity().runOnUiThread(() -> {
+                        if (swipeRefresh != null) swipeRefresh.setRefreshing(false);
+                        Toast.makeText(requireContext(), "Network error: " + e.getMessage(), Toast.LENGTH_SHORT).show();
+                    });
                 }
             }
         });

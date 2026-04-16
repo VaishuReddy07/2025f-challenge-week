@@ -23,22 +23,32 @@ public class WorkoutExerciseAdapter extends RecyclerView.Adapter<RecyclerView.Vi
     private static final int TYPE_ITEM = 1;
 
     private List<Object> items = new ArrayList<>();
+    private boolean useGrouping = true;
+
+    public void setUseGrouping(boolean useGrouping) {
+        this.useGrouping = useGrouping;
+    }
 
     public void setExercises(List<WorkoutExercise> exercises) {
         items.clear();
-        // Group by category
-        Map<String, List<WorkoutExercise>> grouped = new TreeMap<>();
-        for (WorkoutExercise we : exercises) {
-            String category = we.getCategory() != null ? we.getCategory() : "Other";
-            if (!grouped.containsKey(category)) {
-                grouped.put(category, new ArrayList<>());
+        
+        if (!useGrouping) {
+            items.addAll(exercises);
+        } else {
+            // Group by category
+            Map<String, List<WorkoutExercise>> grouped = new TreeMap<>();
+            for (WorkoutExercise we : exercises) {
+                String category = we.getCategory() != null && !we.getCategory().isEmpty() ? we.getCategory() : "Other";
+                if (!grouped.containsKey(category)) {
+                    grouped.put(category, new ArrayList<>());
+                }
+                grouped.get(category).add(we);
             }
-            grouped.get(category).add(we);
-        }
 
-        for (Map.Entry<String, List<WorkoutExercise>> entry : grouped.entrySet()) {
-            items.add(entry.getKey()); // Header
-            items.addAll(entry.getValue()); // Items
+            for (Map.Entry<String, List<WorkoutExercise>> entry : grouped.entrySet()) {
+                items.add(entry.getKey()); // Header
+                items.addAll(entry.getValue()); // Items
+            }
         }
         notifyDataSetChanged();
     }
@@ -75,6 +85,12 @@ public class WorkoutExerciseAdapter extends RecyclerView.Adapter<RecyclerView.Vi
             WorkoutExercise we = (WorkoutExercise) items.get(position);
             ItemViewHolder itemHolder = (ItemViewHolder) holder;
             itemHolder.tvName.setText(we.getName());
+            
+            // If it's from history, we might want to show the date
+            if (we.getWorkoutDate() != null && !we.getWorkoutDate().isEmpty()) {
+                itemHolder.tvName.setText(we.getName() + " (" + we.getWorkoutDate() + ")");
+            }
+
             itemHolder.tvSets.setText(String.valueOf(we.getSets()));
             itemHolder.tvReps.setText(String.valueOf(we.getReps()));
             itemHolder.tvWeight.setText(String.format(Locale.getDefault(), "%.1f kg", we.getWeightKg()));

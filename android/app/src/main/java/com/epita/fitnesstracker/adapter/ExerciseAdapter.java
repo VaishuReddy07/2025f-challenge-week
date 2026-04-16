@@ -16,11 +16,20 @@ import java.util.List;
 
 public class ExerciseAdapter extends RecyclerView.Adapter<ExerciseAdapter.ViewHolder> {
 
+    public interface OnItemClickListener {
+        void onItemClick(Exercise exercise);
+    }
+
     private List<Exercise> exercises = new ArrayList<>();
+    private OnItemClickListener listener;
 
     public void setExercises(List<Exercise> exercises) {
         this.exercises = exercises;
         notifyDataSetChanged();
+    }
+
+    public void setOnItemClickListener(OnItemClickListener listener) {
+        this.listener = listener;
     }
 
     @NonNull
@@ -37,6 +46,11 @@ public class ExerciseAdapter extends RecyclerView.Adapter<ExerciseAdapter.ViewHo
         holder.tvName.setText(exercise.getName());
         holder.tvCategory.setText(exercise.getCategory());
         holder.tvDescription.setText(exercise.getDescription());
+        holder.itemView.setOnClickListener(v -> {
+            if (listener != null) {
+                listener.onItemClick(exercise);
+            }
+        });
     }
 
     @Override

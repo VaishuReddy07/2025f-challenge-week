@@ -75,7 +75,20 @@ init_db()
 # -------------------------------------------
 @app.route("/exercises", methods=["GET"])
 def list_exercises():
-    return jsonify(get_all_exercises())
+    category = request.args.get("category")
+    
+    if category:
+        # Filter exercises by category
+        conn = get_db()
+        cursor = conn.cursor(dictionary=True)
+        cursor.execute("SELECT * FROM exercises WHERE category = %s ORDER BY category, name", (category,))
+        exercises = cursor.fetchall()
+        cursor.close()
+        conn.close()
+        return jsonify(exercises)
+    else:
+        # Return all exercises
+        return jsonify(get_all_exercises())
 
 
 # -------------------------------------------
@@ -98,6 +111,20 @@ def list_workouts():
         cursor.execute("SELECT * FROM workouts ORDER BY date")
 
     workouts = cursor.fetchall()
+
+    # Enhance each workout with exercise count and total volume
+    for workout in workouts:
+        cursor.execute("""
+            SELECT 
+                COUNT(*) as exercise_count,
+                SUM(COALESCE(sets, 0) * COALESCE(reps, 0) * COALESCE(weight_kg, 0)) as total_volume
+            FROM workout_exercises
+            WHERE workout_id = %s
+        """, (workout["id"],))
+        
+        stats = cursor.fetchone()
+        workout["total_exercises"] = stats["exercise_count"] or 0
+        workout["total_volume"] = float(stats["total_volume"]) if stats["total_volume"] else 0.0
 
     cursor.close()
     conn.close()

@@ -13,6 +13,7 @@ import com.epita.fitnesstracker.model.Workout;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 
 public class WorkoutAdapter extends RecyclerView.Adapter<WorkoutAdapter.ViewHolder> {
 
@@ -55,6 +56,10 @@ public class WorkoutAdapter extends RecyclerView.Adapter<WorkoutAdapter.ViewHold
         holder.tvDate.setText(workout.getDate());
         holder.tvDuration.setText(workout.getDurationMin() + " min");
         holder.tvNotes.setText(workout.getNotes());
+        
+        holder.tvExCount.setText(String.valueOf(workout.getExerciseCount()));
+        holder.tvVolume.setText(String.format(Locale.getDefault(), "%.1f kg", workout.getTotalVolume()));
+        
         holder.itemView.setOnClickListener(v -> {
             if (listener != null) {
                 listener.onItemClick(workout);
@@ -68,13 +73,15 @@ public class WorkoutAdapter extends RecyclerView.Adapter<WorkoutAdapter.ViewHold
     }
 
     static class ViewHolder extends RecyclerView.ViewHolder {
-        TextView tvDate, tvDuration, tvNotes;
+        TextView tvDate, tvDuration, tvNotes, tvExCount, tvVolume;
 
         ViewHolder(View itemView) {
             super(itemView);
             tvDate = itemView.findViewById(R.id.tvWorkoutDate);
             tvDuration = itemView.findViewById(R.id.tvWorkoutDuration);
             tvNotes = itemView.findViewById(R.id.tvWorkoutNotes);
+            tvExCount = itemView.findViewById(R.id.tvWorkoutExCount);
+            tvVolume = itemView.findViewById(R.id.tvWorkoutVolume);
         }
     }
 }
