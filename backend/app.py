@@ -75,7 +75,20 @@ init_db()
 # -------------------------------------------
 @app.route("/exercises", methods=["GET"])
 def list_exercises():
-    return jsonify(get_all_exercises())
+    category = request.args.get("category")
+    
+    if category:
+        # Filter exercises by category
+        conn = get_db()
+        cursor = conn.cursor(dictionary=True)
+        cursor.execute("SELECT * FROM exercises WHERE category = %s ORDER BY category, name", (category,))
+        exercises = cursor.fetchall()
+        cursor.close()
+        conn.close()
+        return jsonify(exercises)
+    else:
+        # Return all exercises
+        return jsonify(get_all_exercises())
 
 
 # -------------------------------------------
