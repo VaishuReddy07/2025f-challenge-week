@@ -21,5 +21,7 @@
         <activity android:name=".WorkoutDetailActivity" />
         <activity android:name=".CreateWorkoutActivity"
             android:label="New Workout" />
+        <activity android:name=".ExerciseHistoryActivity"
+            android:label="Exercise History" />
     </application>
 </manifest>

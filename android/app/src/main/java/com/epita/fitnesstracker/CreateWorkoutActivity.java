@@ -3,10 +3,12 @@ package com.epita.fitnesstracker;
 import android.app.DatePickerDialog;
 import android.os.Bundle;
 import android.os.SystemClock;
+import android.view.MenuItem;
 import android.widget.Chronometer;
 import android.widget.EditText;
 import android.widget.Toast;
 
+import androidx.annotation.NonNull;
 import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.recyclerview.widget.LinearLayoutManager;
@@ -37,6 +39,11 @@ public class CreateWorkoutActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_create_workout);
 
+        if (getSupportActionBar() != null) {
+            getSupportActionBar().setDisplayHomeAsUpEnabled(true);
+            getSupportActionBar().setTitle("New Workout");
+        }
+
         etDate = findViewById(R.id.etWorkoutDate);
         etTitle = findViewById(R.id.etWorkoutTitle);
         etNotes = findViewById(R.id.etWorkoutNotes);
@@ -61,6 +68,15 @@ public class CreateWorkoutActivity extends AppCompatActivity {
         // Default to today's date
         Calendar c = Calendar.getInstance();
         updateDateLabel(c.get(Calendar.YEAR), c.get(Calendar.MONTH), c.get(Calendar.DAY_OF_MONTH));
+    }
+
+    @Override
+    public boolean onOptionsItemSelected(@NonNull MenuItem item) {
+        if (item.getItemId() == android.R.id.home) {
+            finish();
+            return true;
+        }
+        return super.onOptionsItemSelected(item);
     }
 
     private void showDatePicker() {

@@ -1,5 +1,6 @@
 package com.epita.fitnesstracker;
 
+import android.content.Intent;
 import android.os.Bundle;
 import android.view.LayoutInflater;
 import android.view.View;
@@ -41,6 +42,13 @@ public class ExercisesFragment extends Fragment {
         RecyclerView rv = view.findViewById(R.id.rvExercises);
         rv.setLayoutManager(new LinearLayoutManager(requireContext()));
         adapter = new ExerciseAdapter();
+        adapter.setOnItemClickListener(exercise -> {
+            Intent intent = new Intent(requireContext(), ExerciseHistoryActivity.class);
+            intent.putExtra("EXERCISE_ID", exercise.getId());
+            intent.putExtra("EXERCISE_NAME", exercise.getName());
+            intent.putExtra("EXERCISE_CATEGORY", exercise.getCategory());
+            startActivity(intent);
+        });
         rv.setAdapter(adapter);
 
         fetchExercises();
@@ -57,21 +65,27 @@ public class ExercisesFragment extends Fragment {
                         JSONObject obj = arr.getJSONObject(i);
                         list.add(Exercise.fromJson(obj));
                     }
-                    requireActivity().runOnUiThread(() -> adapter.setExercises(list));
+                    if (isAdded()) {
+                        requireActivity().runOnUiThread(() -> adapter.setExercises(list));
+                    }
                 } catch (Exception e) {
-                    requireActivity().runOnUiThread(() ->
-                            Toast.makeText(requireContext(),
-                                    "Parse error: " + e.getMessage(),
-                                    Toast.LENGTH_SHORT).show());
+                    if (isAdded()) {
+                        requireActivity().runOnUiThread(() ->
+                                Toast.makeText(requireContext(),
+                                        "Parse error: " + e.getMessage(),
+                                        Toast.LENGTH_SHORT).show());
+                    }
                 }
             }
 
             @Override
             public void onError(Exception e) {
-                requireActivity().runOnUiThread(() ->
-                        Toast.makeText(requireContext(),
-                                "Network error: " + e.getMessage(),
-                                Toast.LENGTH_SHORT).show());
+                if (isAdded()) {
+                    requireActivity().runOnUiThread(() ->
+                            Toast.makeText(requireContext(),
+                                    "Network error: " + e.getMessage(),
+                                    Toast.LENGTH_SHORT).show());
+                }
             }
         });
     }
