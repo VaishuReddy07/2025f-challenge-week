@@ -3,6 +3,7 @@ package com.epita.fitnesstracker;
 import android.os.Bundle;
 import android.util.Log;
 import android.view.MenuItem;
+import android.view.View;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -20,11 +21,12 @@ import org.json.JSONObject;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 
 public class ExerciseHistoryActivity extends AppCompatActivity {
 
     private static final String TAG = "ExerciseHistory";
-    private TextView tvName, tvCategory;
+    private TextView tvName, tvCategory, tvProgress;
     private WorkoutExerciseAdapter adapter;
 
     @Override
@@ -39,11 +41,12 @@ public class ExerciseHistoryActivity extends AppCompatActivity {
 
         tvName = findViewById(R.id.tvExHistoryName);
         tvCategory = findViewById(R.id.tvExHistoryCategory);
+        tvProgress = findViewById(R.id.tvProgressText);
         RecyclerView rv = findViewById(R.id.rvExerciseHistory);
 
         rv.setLayoutManager(new LinearLayoutManager(this));
         adapter = new WorkoutExerciseAdapter();
-        adapter.setUseGrouping(false); // Disable grouping for exercise history
+        adapter.setUseGrouping(false);
         rv.setAdapter(adapter);
 
         int exerciseId = getIntent().getIntExtra("EXERCISE_ID", -1);
@@ -77,11 +80,13 @@ public class ExerciseHistoryActivity extends AppCompatActivity {
                     
                     List<WorkoutExercise> historyList = new ArrayList<>();
                     for (int i = 0; i < historyArr.length(); i++) {
-                        JSONObject obj = historyArr.getJSONObject(i);
-                        historyList.add(WorkoutExercise.fromJson(obj));
+                        historyList.add(WorkoutExercise.fromJson(historyArr.getJSONObject(i)));
                     }
                     
-                    runOnUiThread(() -> adapter.setExercises(historyList));
+                    runOnUiThread(() -> {
+                        adapter.setExercises(historyList);
+                        calculateProgress(historyList);
+                    });
                 } catch (Exception e) {
                     Log.e(TAG, "Parsing error", e);
                     runOnUiThread(() -> Toast.makeText(ExerciseHistoryActivity.this, "Error parsing history", Toast.LENGTH_SHORT).show());
@@ -93,5 +98,33 @@ public class ExerciseHistoryActivity extends AppCompatActivity {
                 runOnUiThread(() -> Toast.makeText(ExerciseHistoryActivity.this, "Network error", Toast.LENGTH_SHORT).show());
             }
         });
+    }
+
+    private void calculateProgress(List<WorkoutExercise> history) {
+        if (history.size() < 2) {
+            tvProgress.setVisibility(View.GONE);
+            return;
+        }
+
+        // Assuming history is returned in reverse chronological order (newest first)
+        WorkoutExercise newest = history.get(0);
+        WorkoutExercise oldest = history.get(history.size() - 1);
+
+        double weightNew = newest.getWeightKg();
+        double weightOld = oldest.getWeightKg();
+
+        if (weightNew > 0 && weightOld > 0) {
+            String progressText = String.format(Locale.getDefault(), 
+                "Progress: %.1f kg → %.1f kg", weightOld, weightNew);
+            tvProgress.setText(progressText);
+            tvProgress.setVisibility(View.VISIBLE);
+            
+            // Add a little color based on progress
+            if (weightNew > weightOld) {
+                tvProgress.setTextColor(0xFF4CAF50); // Green
+            } else if (weightNew < weightOld) {
+                tvProgress.setTextColor(0xFFF44336); // Red
+            }
+        }
     }
 }
