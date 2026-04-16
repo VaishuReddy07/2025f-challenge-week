@@ -1,0 +1,33 @@
+Compromise Application
+│
+├── OR → Exploit Backend Vulnerabilities
+│   │
+│   ├── OR → Exploit IDOR
+│   │   ├── Access /workouts/<id>
+│   │   └── Modify/Delete other users' data
+│   │
+│   ├── OR → Exploit XSS
+│   │   ├── Inject <script> in notes
+│   │   └── Execute script in /admin
+│   │
+│   └── OR → Exploit Hardcoded Secrets
+│       ├── Guess API_KEY
+│       └── Access protected endpoints
+│
+├── OR → Abuse Authentication Weakness
+│   │
+│   ├── AND → Bypass API Key
+│   │   ├── Obtain API key (guess/default)
+│   │   └── Send requests with Authorization header
+│   │
+│   └── OR → No User Authentication
+│       └── Direct access to endpoints
+│
+└── OR → Denial of Service (DoS)
+    │
+    ├── AND → Abuse Import Endpoint
+    │   ├── Send large payload
+    │   └── Cause memory exhaustion
+    │
+    └── OR → Rate Limit Bypass
+        └── Use multiple IPs 
