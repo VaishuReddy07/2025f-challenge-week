@@ -4,6 +4,7 @@ import static android.app.Activity.RESULT_OK;
 
 import android.content.Intent;
 import android.os.Bundle;
+import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
@@ -40,6 +41,7 @@ import java.util.Locale;
 
 public class HistoryFragment extends Fragment {
 
+    private static final String TAG = "HistoryFragment";
     private WorkoutAdapter adapter;
     private RecyclerView rvWorkouts;
     private LinearLayout llEmptyState;
@@ -151,7 +153,7 @@ public class HistoryFragment extends Fragment {
 
     private void updateCountLabel() {
         int count = adapter.getItemCount();
-        tvWorkoutCount.setText(count + " workouts");
+        tvWorkoutCount.setText(String.format(Locale.getDefault(), "%d workouts", count));
         if (count == 0) {
             rvWorkouts.setVisibility(View.GONE);
             llEmptyState.setVisibility(View.VISIBLE);
@@ -196,7 +198,7 @@ public class HistoryFragment extends Fragment {
                     }
                     if (isAdded()) {
                         requireActivity().runOnUiThread(() -> {
-                            swipeRefresh.setRefreshing(false);
+                            if (swipeRefresh != null) swipeRefresh.setRefreshing(false);
                             adapter.setWorkouts(list);
                             updateCountLabel();
                             
@@ -205,7 +207,9 @@ public class HistoryFragment extends Fragment {
                                     tvEmptyMessage.setText("No workouts yet");
                                 } else {
                                     Chip chip = chipGroupFilter.findViewById(checkedId);
-                                    if (chip != null) tvEmptyMessage.setText("No workouts for " + chip.getText());
+                                    if (chip != null) {
+                                        tvEmptyMessage.setText(String.format(Locale.getDefault(), "No workouts for %s", chip.getText()));
+                                    }
                                 }
                             }
                         });
@@ -213,7 +217,7 @@ public class HistoryFragment extends Fragment {
                 } catch (Exception e) {
                     if (isAdded()) {
                         requireActivity().runOnUiThread(() -> {
-                            swipeRefresh.setRefreshing(false);
+                            if (swipeRefresh != null) swipeRefresh.setRefreshing(false);
                             Toast.makeText(requireContext(), "Parse error: " + e.getMessage(), Toast.LENGTH_SHORT).show();
                         });
                     }
@@ -224,7 +228,7 @@ public class HistoryFragment extends Fragment {
             public void onError(Exception e) {
                 if (isAdded()) {
                     requireActivity().runOnUiThread(() -> {
-                        swipeRefresh.setRefreshing(false);
+                        if (swipeRefresh != null) swipeRefresh.setRefreshing(false);
                         Toast.makeText(requireContext(), "Network error: " + e.getMessage(), Toast.LENGTH_SHORT).show();
                     });
                 }
