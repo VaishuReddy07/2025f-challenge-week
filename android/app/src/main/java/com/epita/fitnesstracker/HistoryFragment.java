@@ -15,7 +15,9 @@ import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
+import androidx.appcompat.app.AlertDialog;
 import androidx.fragment.app.Fragment;
+import androidx.recyclerview.widget.ItemTouchHelper;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
@@ -79,6 +81,9 @@ public class HistoryFragment extends Fragment {
         });
         rvWorkouts.setAdapter(adapter);
 
+        // Setup Swipe-to-delete
+        setupSwipeToDelete();
+
         chipGroupFilter.setOnCheckedStateChangeListener((group, checkedIds) -> {
             fetchWorkouts();
         });
@@ -91,11 +96,71 @@ public class HistoryFragment extends Fragment {
         fetchWorkouts();
     }
 
+    private void setupSwipeToDelete() {
+        ItemTouchHelper.SimpleCallback simpleItemTouchCallback = new ItemTouchHelper.SimpleCallback(0, ItemTouchHelper.LEFT | ItemTouchHelper.RIGHT) {
+            @Override
+            public boolean onMove(@NonNull RecyclerView recyclerView, @NonNull RecyclerView.ViewHolder viewHolder, @NonNull RecyclerView.ViewHolder target) {
+                return false;
+            }
+
+            @Override
+            public void onSwiped(@NonNull RecyclerView.ViewHolder viewHolder, int swipeDir) {
+                int position = viewHolder.getAdapterPosition();
+                Workout workout = adapter.getWorkout(position);
+                
+                new AlertDialog.Builder(requireContext())
+                        .setTitle("Delete Workout")
+                        .setMessage("Are you sure you want to delete this workout?")
+                        .setPositiveButton("Delete", (dialog, which) -> deleteWorkout(workout.getId(), position))
+                        .setNegativeButton("Cancel", (dialog, which) -> adapter.notifyItemChanged(position))
+                        .setOnCancelListener(dialog -> adapter.notifyItemChanged(position))
+                        .show();
+            }
+        };
+
+        ItemTouchHelper itemTouchHelper = new ItemTouchHelper(simpleItemTouchCallback);
+        itemTouchHelper.attachToRecyclerView(rvWorkouts);
+    }
+
+    private void deleteWorkout(int workoutId, int position) {
+        ApiClient.delete("/workouts/" + workoutId, new ApiClient.Callback() {
+            @Override
+            public void onSuccess(String responseBody) {
+                if (isAdded()) {
+                    requireActivity().runOnUiThread(() -> {
+                        adapter.removeWorkout(position);
+                        Toast.makeText(requireContext(), "Workout deleted", Toast.LENGTH_SHORT).show();
+                        updateCountLabel();
+                    });
+                }
+            }
+
+            @Override
+            public void onError(Exception e) {
+                if (isAdded()) {
+                    requireActivity().runOnUiThread(() -> {
+                        adapter.notifyItemChanged(position);
+                        Toast.makeText(requireContext(), "Error deleting workout", Toast.LENGTH_SHORT).show();
+                    });
+                }
+            }
+        });
+    }
+
+    private void updateCountLabel() {
+        int count = adapter.getItemCount();
+        tvWorkoutCount.setText(count + " workouts");
+        if (count == 0) {
+            rvWorkouts.setVisibility(View.GONE);
+            llEmptyState.setVisibility(View.VISIBLE);
+        }
+    }
+
     private void fetchWorkouts() {
         int checkedId = chipGroupFilter.getCheckedChipId();
         String query = "";
 
-        if (checkedId != R.id.chipAll) {
+        if (checkedId != View.NO_ID && checkedId != R.id.chipAll) {
             Calendar cal = Calendar.getInstance();
             SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd", Locale.US);
             String to = sdf.format(new Date());
@@ -125,22 +190,16 @@ public class HistoryFragment extends Fragment {
                     if (isAdded()) {
                         requireActivity().runOnUiThread(() -> {
                             adapter.setWorkouts(list);
-                            tvWorkoutCount.setText(list.size() + " workouts");
+                            updateCountLabel();
                             
                             if (list.isEmpty()) {
-                                rvWorkouts.setVisibility(View.GONE);
-                                llEmptyState.setVisibility(View.VISIBLE);
-                                
                                 // Update empty message based on filter
-                                if (checkedId == R.id.chipAll) {
+                                if (checkedId == R.id.chipAll || checkedId == View.NO_ID) {
                                     tvEmptyMessage.setText("No workouts yet");
                                 } else {
                                     Chip chip = chipGroupFilter.findViewById(checkedId);
                                     tvEmptyMessage.setText("No workouts for " + chip.getText());
                                 }
-                            } else {
-                                rvWorkouts.setVisibility(View.VISIBLE);
-                                llEmptyState.setVisibility(View.GONE);
                             }
                         });
                     }

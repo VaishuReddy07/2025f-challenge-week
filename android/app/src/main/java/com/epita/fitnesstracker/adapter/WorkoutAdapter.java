@@ -32,6 +32,15 @@ public class WorkoutAdapter extends RecyclerView.Adapter<WorkoutAdapter.ViewHold
         this.listener = listener;
     }
 
+    public Workout getWorkout(int position) {
+        return workouts.get(position);
+    }
+
+    public void removeWorkout(int position) {
+        workouts.remove(position);
+        notifyItemRemoved(position);
+    }
+
     @NonNull
     @Override
     public ViewHolder onCreateViewHolder(@NonNull ViewGroup parent, int viewType) {
