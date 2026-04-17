@@ -1,5 +1,7 @@
 package com.epita.fitnesstracker;
 
+import static android.app.Activity.RESULT_OK;
+
 import android.content.Intent;
 import android.os.Bundle;
 import android.view.LayoutInflater;
@@ -7,6 +9,8 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.widget.Toast;
 
+import androidx.activity.result.ActivityResultLauncher;
+import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.fragment.app.Fragment;
@@ -19,6 +23,7 @@ import com.epita.fitnesstracker.api.ApiClient;
 import com.epita.fitnesstracker.model.Exercise;
 import com.google.android.material.chip.Chip;
 import com.google.android.material.chip.ChipGroup;
+import com.google.android.material.floatingactionbutton.FloatingActionButton;
 
 import org.json.JSONArray;
 import org.json.JSONObject;
@@ -35,6 +40,15 @@ public class ExercisesFragment extends Fragment {
     private SwipeRefreshLayout swipeRefresh;
     private final List<Exercise> allExercises = new ArrayList<>();
 
+    private final ActivityResultLauncher<Intent> addExerciseLauncher = registerForActivityResult(
+            new ActivityResultContracts.StartActivityForResult(),
+            result -> {
+                if (result.getResultCode() == RESULT_OK) {
+                    fetchExercises();
+                }
+            }
+    );
+
     @Nullable
     @Override
     public View onCreateView(@NonNull LayoutInflater inflater,
@@ -50,6 +64,7 @@ public class ExercisesFragment extends Fragment {
         swipeRefresh = view.findViewById(R.id.swipeRefreshExercises);
         cgCategories = view.findViewById(R.id.cgExerciseCategories);
         RecyclerView rv = view.findViewById(R.id.rvExercises);
+        FloatingActionButton fab = view.findViewById(R.id.fabAddExercise);
         
         rv.setLayoutManager(new LinearLayoutManager(requireContext()));
         adapter = new ExerciseAdapter();
@@ -65,6 +80,11 @@ public class ExercisesFragment extends Fragment {
         cgCategories.setOnCheckedStateChangeListener((group, checkedIds) -> filterExercises());
         
         swipeRefresh.setOnRefreshListener(this::fetchExercises);
+
+        fab.setOnClickListener(v -> {
+            Intent intent = new Intent(requireContext(), AddExerciseActivity.class);
+            addExerciseLauncher.launch(intent);
+        });
 
         fetchExercises();
     }

@@ -47,6 +47,7 @@ public class HistoryFragment extends Fragment {
     private LinearLayout llEmptyState;
     private ChipGroup chipGroupFilter;
     private TextView tvWorkoutCount, tvEmptyMessage;
+    private TextView tvWeeklyWorkouts, tvWeeklyVolume;
     private SwipeRefreshLayout swipeRefresh;
 
     private final ActivityResultLauncher<Intent> createWorkoutLauncher = registerForActivityResult(
@@ -76,6 +77,9 @@ public class HistoryFragment extends Fragment {
         chipGroupFilter = view.findViewById(R.id.chipGroupFilter);
         tvWorkoutCount = view.findViewById(R.id.tvWorkoutCount);
         tvEmptyMessage = view.findViewById(R.id.tvEmptyMessage);
+        
+        tvWeeklyWorkouts = view.findViewById(R.id.tvWeeklyWorkouts);
+        tvWeeklyVolume = view.findViewById(R.id.tvWeeklyVolume);
 
         rvWorkouts.setLayoutManager(new LinearLayoutManager(requireContext()));
         adapter = new WorkoutAdapter();
@@ -134,7 +138,7 @@ public class HistoryFragment extends Fragment {
                     requireActivity().runOnUiThread(() -> {
                         adapter.removeWorkout(position);
                         Toast.makeText(requireContext(), "Workout deleted", Toast.LENGTH_SHORT).show();
-                        updateCountLabel();
+                        updateSummaries();
                     });
                 }
             }
@@ -151,9 +155,10 @@ public class HistoryFragment extends Fragment {
         });
     }
 
-    private void updateCountLabel() {
+    private void updateSummaries() {
         int count = adapter.getItemCount();
         tvWorkoutCount.setText(String.format(Locale.getDefault(), "%d workouts", count));
+        
         if (count == 0) {
             rvWorkouts.setVisibility(View.GONE);
             llEmptyState.setVisibility(View.VISIBLE);
@@ -161,6 +166,35 @@ public class HistoryFragment extends Fragment {
             rvWorkouts.setVisibility(View.VISIBLE);
             llEmptyState.setVisibility(View.GONE);
         }
+        
+        calculateWeeklyStats();
+    }
+
+    private void calculateWeeklyStats() {
+        Calendar cal = Calendar.getInstance();
+        cal.set(Calendar.DAY_OF_WEEK, cal.getFirstDayOfWeek());
+        cal.set(Calendar.HOUR_OF_DAY, 0);
+        cal.set(Calendar.MINUTE, 0);
+        cal.set(Calendar.SECOND, 0);
+        long startOfWeek = cal.getTimeInMillis();
+
+        int weeklyCount = 0;
+        double weeklyVolume = 0;
+        SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd", Locale.US);
+
+        for (int i = 0; i < adapter.getItemCount(); i++) {
+            Workout w = adapter.getWorkout(i);
+            try {
+                Date workoutDate = sdf.parse(w.getDate());
+                if (workoutDate != null && workoutDate.getTime() >= startOfWeek) {
+                    weeklyCount++;
+                    weeklyVolume += w.getTotalVolume();
+                }
+            } catch (Exception ignored) {}
+        }
+
+        tvWeeklyWorkouts.setText(String.valueOf(weeklyCount));
+        tvWeeklyVolume.setText(String.format(Locale.getDefault(), "%.1f kg", weeklyVolume));
     }
 
     private void fetchWorkouts() {
@@ -200,7 +234,7 @@ public class HistoryFragment extends Fragment {
                         requireActivity().runOnUiThread(() -> {
                             if (swipeRefresh != null) swipeRefresh.setRefreshing(false);
                             adapter.setWorkouts(list);
-                            updateCountLabel();
+                            updateSummaries();
                             
                             if (list.isEmpty()) {
                                 if (checkedId == R.id.chipAll || checkedId == View.NO_ID) {

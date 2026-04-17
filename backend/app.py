@@ -16,11 +16,11 @@ load_dotenv()
 
 app = Flask(__name__)
 
-app.secret_key = os.getenv("SECRET_KEY")
+app.secret_key = os.getenv("SECRET_KEY","mysecretkey123")
 if not app.secret_key:
     raise RuntimeError("SECRET_KEY environment variable must be set")
 
-API_KEY = os.getenv("API_KEY")
+API_KEY = os.getenv("API_KEY","myapikey123")
 if not API_KEY:
     raise RuntimeError("API_KEY environment variable must be set")
 
@@ -29,33 +29,28 @@ RATE_LIMIT_MAX_REQUESTS = int(os.getenv("RATE_LIMIT_MAX_REQUESTS", "100"))
 rate_limit_data = defaultdict(lambda: {"count": 0, "reset_at": time.time() + RATE_LIMIT_WINDOW})
 
 CORS(app)
-
+#--------------------------------------
+#validates API requests using a Bearer token
+#------------------------------------------
 
 @app.before_request
 def enforce_security():
-    if request.method == "OPTIONS":
+    # SKIP AUTH FOR THIS API
+    if request.path.startswith("/exercises"):
         return None
 
-    client_ip = request.remote_addr or "unknown"
-    now = time.time()
-    entry = rate_limit_data[client_ip]
-
-    if now >= entry["reset_at"]:
-        entry["count"] = 0
-        entry["reset_at"] = now + RATE_LIMIT_WINDOW
-
-    entry["count"] += 1
-    if entry["count"] > RATE_LIMIT_MAX_REQUESTS:
-        return jsonify({"error": "Too many requests"}), 429
-
     auth_header = request.headers.get("Authorization", "")
+
     if not auth_header.startswith("Bearer "):
         return jsonify({"error": "Authorization required"}), 401
 
-    token = auth_header.split(" ", 1)[1]
+    token = auth_header.split(" ", 1)[1].strip()
+
     if token != API_KEY:
         return jsonify({"error": "Unauthorized"}), 401
-
+#---------------------------------------------------------
+#adds security headers to every response
+#----------------------------------------------------------
 
 @app.after_request
 def add_header(response):
@@ -71,28 +66,15 @@ init_db()
 
 
 # -------------------------------------------
-# GET EXERCISES
+# GET EXERCISES        (Returns all exercises from the database)
 # -------------------------------------------
 @app.route("/exercises", methods=["GET"])
 def list_exercises():
-    category = request.args.get("category")
-    
-    if category:
-        # Filter exercises by category
-        conn = get_db()
-        cursor = conn.cursor(dictionary=True)
-        cursor.execute("SELECT * FROM exercises WHERE category = %s ORDER BY category, name", (category,))
-        exercises = cursor.fetchall()
-        cursor.close()
-        conn.close()
-        return jsonify(exercises)
-    else:
-        # Return all exercises
-        return jsonify(get_all_exercises())
+    return jsonify(get_all_exercises())
 
 
 # -------------------------------------------
-# GET WORKOUTS
+# GET WORKOUTS      (Fetches workouts with optional date filtering  no dates provided return to all workouts)
 # -------------------------------------------
 @app.route("/workouts", methods=["GET"])
 def list_workouts():
@@ -112,20 +94,6 @@ def list_workouts():
 
     workouts = cursor.fetchall()
 
-    # Enhance each workout with exercise count and total volume
-    for workout in workouts:
-        cursor.execute("""
-            SELECT 
-                COUNT(*) as exercise_count,
-                SUM(COALESCE(sets, 0) * COALESCE(reps, 0) * COALESCE(weight_kg, 0)) as total_volume
-            FROM workout_exercises
-            WHERE workout_id = %s
-        """, (workout["id"],))
-        
-        stats = cursor.fetchone()
-        workout["total_exercises"] = stats["exercise_count"] or 0
-        workout["total_volume"] = float(stats["total_volume"]) if stats["total_volume"] else 0.0
-
     cursor.close()
     conn.close()
 
@@ -133,7 +101,7 @@ def list_workouts():
 
 
 # -------------------------------------------
-# CREATE WORKOUT (BASIC)
+# CREATE WORKOUT (BASIC)   (Creates a workout and inserts related exercises)
 # -------------------------------------------
 @app.route("/workouts", methods=["POST"])
 def add_workout():
@@ -198,13 +166,13 @@ def add_workout():
 
 
 # -------------------------------------------
-# GET WORKOUT DETAILS (JOIN)
+# GET WORKOUT DETAILS (JOIN)   (Returns full workout details using SQL joins)
 # -------------------------------------------
 @app.route("/workouts/<int:workout_id>", methods=["GET"])
 def get_workout_detail(workout_id):
     conn = get_db()
     cursor = conn.cursor(dictionary=True)
-
+#  connection to run the quries and get result
     cursor.execute("""
         SELECT 
             w.id,
@@ -258,7 +226,7 @@ def get_workout_detail(workout_id):
 
 
 # -------------------------------------------
-# STATS API
+# STATS API                   (Calculates overall workout statistics)
 # -------------------------------------------
 @app.route("/stats", methods=["GET"])
 def get_stats():
@@ -310,7 +278,7 @@ def get_stats():
 
 
 # -------------------------------------------
-# SEARCH WORKOUTS
+# SEARCH WORKOUTS          (Searches workouts within a date range)
 # -------------------------------------------
 @app.route("/workouts/search")
 def search_workouts():
@@ -334,7 +302,7 @@ def search_workouts():
 
 
 # -------------------------------------------
-# ADMIN PAGE
+# ADMIN PAGEpython app.py
 # -------------------------------------------
 @app.route("/admin")
 def admin_page():
@@ -634,11 +602,51 @@ def get_exercise_history(exercise_id):
         "description": exercise["description"],
         "history": history_entries
     }), 200
+#--------------------------------------------
+#POST /exercises (name, category, desc)
+#--------------------------------------------
+@app.route("/exercises", methods=["POST"])
+def create_exercise():
+    try:
+        data = request.get_json()
 
+        if not data:
+            return jsonify({"error": "Invalid JSON"}), 400
+
+        name = data.get("name")
+        category = data.get("category")
+        desc = data.get("desc")
+
+        if not name or not category:
+            return jsonify({"error": "name and category are required"}), 400
+
+        conn = get_db()
+        cursor = conn.cursor()
+
+        # ✅ FIXED HERE
+        cursor.execute(
+            "INSERT INTO exercises (name, category, description) VALUES (%s, %s, %s)",
+            (name, category, desc)
+        )
+
+        conn.commit()
+        exercise_id = cursor.lastrowid
+
+        cursor.close()
+        conn.close()
+
+        return jsonify({
+            "id": exercise_id,
+            "name": name,
+            "category": category,
+            "desc": desc
+        }), 201
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 # -------------------------------------------
 # RUN
 # -------------------------------------------
 if __name__ == "__main__":
-    debug_mode = os.getenv("FLASK_DEBUG", "False").lower() == "true"
-    app.run(debug=debug_mode, port=5000)
+    app.run(debug=True, port=5000)

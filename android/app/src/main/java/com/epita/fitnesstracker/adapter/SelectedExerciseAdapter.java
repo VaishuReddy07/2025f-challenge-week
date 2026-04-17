@@ -18,6 +18,7 @@ import androidx.recyclerview.widget.RecyclerView;
 
 import com.epita.fitnesstracker.R;
 import com.epita.fitnesstracker.model.Exercise;
+import com.google.android.material.chip.ChipGroup;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -35,14 +36,16 @@ public class SelectedExerciseAdapter extends RecyclerView.Adapter<SelectedExerci
         public Exercise exercise;
         public String notes = "";
         public List<ExerciseSet> sets = new ArrayList<>();
+        public int restDurationSeconds = 60; // Default rest duration
 
         public SelectedExercise(Exercise exercise) {
             this.exercise = exercise;
-            this.sets.add(new ExerciseSet()); // Add one default set
+            this.sets.add(new ExerciseSet());
         }
     }
 
     private final List<SelectedExercise> selectedExercises = new ArrayList<>();
+    private CountDownTimer currentTimer;
 
     public void addExercise(Exercise exercise) {
         selectedExercises.add(new SelectedExercise(exercise));
@@ -87,18 +90,30 @@ public class SelectedExerciseAdapter extends RecyclerView.Adapter<SelectedExerci
             refreshSets(holder, item);
         });
 
+        holder.cgRestDurations.setOnCheckedStateChangeListener((group, checkedIds) -> {
+            if (checkedIds.contains(R.id.chip60s)) item.restDurationSeconds = 60;
+            else if (checkedIds.contains(R.id.chip90s)) item.restDurationSeconds = 90;
+            else if (checkedIds.contains(R.id.chip120s)) item.restDurationSeconds = 120;
+            holder.tvRestTimer.setText("Rest Timer: " + item.restDurationSeconds + "s");
+        });
+
         refreshSets(holder, item);
 
-        // Rest Timer Logic
         holder.btnStartRest.setOnClickListener(v -> {
+            if (currentTimer != null) currentTimer.cancel();
+            
             holder.btnStartRest.setEnabled(false);
-            new CountDownTimer(60000, 1000) {
+            holder.cgRestDurations.setEnabled(false);
+            
+            currentTimer = new CountDownTimer(item.restDurationSeconds * 1000L, 1000) {
                 public void onTick(long millisUntilFinished) {
-                    holder.tvRestTimer.setText("Rest Timer: " + (millisUntilFinished / 1000) + "s");
+                    holder.tvRestTimer.setText("Rest: " + (millisUntilFinished / 1000) + "s");
                 }
                 public void onFinish() {
                     holder.tvRestTimer.setText("Rest Over!");
                     holder.btnStartRest.setEnabled(true);
+                    holder.cgRestDurations.setEnabled(true);
+                    holder.tvRestTimer.setText("Rest Timer: " + item.restDurationSeconds + "s");
                 }
             }.start();
         });
@@ -162,6 +177,7 @@ public class SelectedExerciseAdapter extends RecyclerView.Adapter<SelectedExerci
         LinearLayout llSetsContainer, llRestTimer;
         Button btnAddSet, btnStartRest;
         ImageButton btnRemoveExercise;
+        ChipGroup cgRestDurations;
 
         ViewHolder(View itemView) {
             super(itemView);
@@ -173,6 +189,7 @@ public class SelectedExerciseAdapter extends RecyclerView.Adapter<SelectedExerci
             llRestTimer = itemView.findViewById(R.id.llRestTimer);
             tvRestTimer = itemView.findViewById(R.id.tvRestTimer);
             btnStartRest = itemView.findViewById(R.id.btnStartRest);
+            cgRestDurations = itemView.findViewById(R.id.cgRestDurations);
         }
     }
 

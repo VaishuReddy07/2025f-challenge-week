@@ -11,9 +11,11 @@ import android.widget.Toast;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.fragment.app.Fragment;
+import androidx.swiperefreshlayout.widget.SwipeRefreshLayout;
 
 import com.epita.fitnesstracker.api.ApiClient;
 
+import org.json.JSONArray;
 import org.json.JSONObject;
 
 import java.util.Iterator;
@@ -22,7 +24,8 @@ import java.util.Locale;
 public class StatsFragment extends Fragment {
 
     private TextView tvTotalWorkouts, tvTotalDuration, tvAvgDuration;
-    private LinearLayout llCategoryStats;
+    private LinearLayout llCategoryStats, llPersonalRecords;
+    private SwipeRefreshLayout swipeRefresh;
 
     @Nullable
     @Override
@@ -34,15 +37,21 @@ public class StatsFragment extends Fragment {
     public void onViewCreated(@NonNull View view, @Nullable Bundle savedInstanceState) {
         super.onViewCreated(view, savedInstanceState);
 
+        swipeRefresh = view.findViewById(R.id.swipeRefreshStats);
         tvTotalWorkouts = view.findViewById(R.id.tvTotalWorkouts);
         tvTotalDuration = view.findViewById(R.id.tvTotalDuration);
         tvAvgDuration = view.findViewById(R.id.tvAvgDuration);
         llCategoryStats = view.findViewById(R.id.llCategoryStats);
+        llPersonalRecords = view.findViewById(R.id.llPersonalRecords);
+
+        swipeRefresh.setOnRefreshListener(this::fetchStats);
 
         fetchStats();
     }
 
     private void fetchStats() {
+        if (swipeRefresh != null) swipeRefresh.setRefreshing(true);
+        
         ApiClient.get("/stats", new ApiClient.Callback() {
             @Override
             public void onSuccess(String responseBody) {
@@ -52,21 +61,44 @@ public class StatsFragment extends Fragment {
                     int totalDuration = json.getInt("total_duration_min");
                     double avgDuration = json.getDouble("avg_duration_min");
                     JSONObject perCategory = json.getJSONObject("workouts_per_category");
+                    
+                    JSONArray prs = json.optJSONArray("personal_records");
 
                     if (isAdded()) {
                         requireActivity().runOnUiThread(() -> {
+                            swipeRefresh.setRefreshing(false);
                             tvTotalWorkouts.setText(String.valueOf(totalWorkouts));
-                            tvTotalDuration.setText(String.format(Locale.getDefault(), "%d min", totalDuration));
-                            tvAvgDuration.setText(String.format(Locale.getDefault(), "%.1f min", avgDuration));
+                            tvTotalDuration.setText(String.format(Locale.getDefault(), "%dm", totalDuration));
+                            tvAvgDuration.setText(String.format(Locale.getDefault(), "%.1fm", avgDuration));
 
+                            // Category Stats
                             llCategoryStats.removeAllViews();
                             Iterator<String> keys = perCategory.keys();
                             while (keys.hasNext()) {
                                 String category = keys.next();
                                 try {
                                     int count = perCategory.getInt(category);
-                                    addCategoryRow(category, count);
+                                    addStatRow(llCategoryStats, category, count + " workouts");
                                 } catch (Exception ignored) {}
+                            }
+                            
+                            // Personal Records
+                            llPersonalRecords.removeAllViews();
+                            if (prs != null && prs.length() > 0) {
+                                for (int i = 0; i < prs.length(); i++) {
+                                    try {
+                                        JSONObject pr = prs.getJSONObject(i);
+                                        String name = pr.getString("exercise_name");
+                                        double weight = pr.getDouble("max_weight");
+                                        addStatRow(llPersonalRecords, name, weight + " kg");
+                                    } catch (Exception ignored) {}
+                                }
+                            } else {
+                                TextView tv = new TextView(requireContext());
+                                tv.setText("Log more sets to see PRs!");
+                                tv.setTextColor(0xFF999999);
+                                tv.setPadding(16, 16, 16, 16);
+                                llPersonalRecords.addView(tv);
                             }
                         });
                     }
@@ -82,18 +114,28 @@ public class StatsFragment extends Fragment {
         });
     }
 
-    private void addCategoryRow(String category, int count) {
-        TextView tv = new TextView(requireContext());
-        tv.setText(String.format(Locale.getDefault(), "%s: %d workouts", category, count));
-        tv.setTextSize(16f);
-        tv.setPadding(0, 8, 0, 8);
-        llCategoryStats.addView(tv);
+    private void addStatRow(LinearLayout container, String label, String value) {
+        View row = LayoutInflater.from(requireContext()).inflate(android.R.layout.simple_list_item_2, container, false);
+        TextView tvLabel = row.findViewById(android.R.id.text1);
+        TextView tvValue = row.findViewById(android.R.id.text2);
+        
+        tvLabel.setText(label);
+        tvLabel.setTextSize(16f);
+        tvLabel.setTypeface(null, android.graphics.Typeface.BOLD);
+        tvLabel.setTextColor(0xFF202124);
+        
+        tvValue.setText(value);
+        tvValue.setTextColor(0xFF5F6368);
+        
+        container.addView(row);
     }
 
     private void showError(String message) {
         if (isAdded()) {
-            requireActivity().runOnUiThread(() ->
-                    Toast.makeText(requireContext(), message, Toast.LENGTH_SHORT).show());
+            requireActivity().runOnUiThread(() -> {
+                if (swipeRefresh != null) swipeRefresh.setRefreshing(false);
+                Toast.makeText(requireContext(), message, Toast.LENGTH_SHORT).show();
+            });
         }
     }
 }

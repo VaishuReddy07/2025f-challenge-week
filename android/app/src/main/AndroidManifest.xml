@@ -23,5 +23,7 @@
             android:label="New Workout" />
         <activity android:name=".ExerciseHistoryActivity"
             android:label="Exercise History" />
+        <activity android:name=".AddExerciseActivity"
+            android:label="Add Custom Exercise" />
     </application>
 </manifest>
