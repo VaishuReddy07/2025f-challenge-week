@@ -625,7 +625,7 @@ def create_exercise():
 
         # ✅ FIXED HERE
         cursor.execute(
-            "INSERT INTO exercises (name, category, description) VALUES (?, ?, ?)",
+            "INSERT INTO exercises (name, category, description) VALUES (%s, %s, %s)",
             (name, category, desc)
         )
 
