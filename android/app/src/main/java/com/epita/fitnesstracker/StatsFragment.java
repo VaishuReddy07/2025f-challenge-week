@@ -11,6 +11,7 @@ import android.widget.Toast;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.fragment.app.Fragment;
+import androidx.swiperefreshlayout.widget.SwipeRefreshLayout;
 
 import com.epita.fitnesstracker.api.ApiClient;
 
@@ -24,6 +25,7 @@ public class StatsFragment extends Fragment {
 
     private TextView tvTotalWorkouts, tvTotalDuration, tvAvgDuration;
     private LinearLayout llCategoryStats, llPersonalRecords;
+    private SwipeRefreshLayout swipeRefresh;
 
     @Nullable
     @Override
@@ -35,16 +37,21 @@ public class StatsFragment extends Fragment {
     public void onViewCreated(@NonNull View view, @Nullable Bundle savedInstanceState) {
         super.onViewCreated(view, savedInstanceState);
 
+        swipeRefresh = view.findViewById(R.id.swipeRefreshStats);
         tvTotalWorkouts = view.findViewById(R.id.tvTotalWorkouts);
         tvTotalDuration = view.findViewById(R.id.tvTotalDuration);
         tvAvgDuration = view.findViewById(R.id.tvAvgDuration);
         llCategoryStats = view.findViewById(R.id.llCategoryStats);
         llPersonalRecords = view.findViewById(R.id.llPersonalRecords);
 
+        swipeRefresh.setOnRefreshListener(this::fetchStats);
+
         fetchStats();
     }
 
     private void fetchStats() {
+        if (swipeRefresh != null) swipeRefresh.setRefreshing(true);
+        
         ApiClient.get("/stats", new ApiClient.Callback() {
             @Override
             public void onSuccess(String responseBody) {
@@ -55,11 +62,11 @@ public class StatsFragment extends Fragment {
                     double avgDuration = json.getDouble("avg_duration_min");
                     JSONObject perCategory = json.getJSONObject("workouts_per_category");
                     
-                    // S039: Expected new field from backend
                     JSONArray prs = json.optJSONArray("personal_records");
 
                     if (isAdded()) {
                         requireActivity().runOnUiThread(() -> {
+                            swipeRefresh.setRefreshing(false);
                             tvTotalWorkouts.setText(String.valueOf(totalWorkouts));
                             tvTotalDuration.setText(String.format(Locale.getDefault(), "%dm", totalDuration));
                             tvAvgDuration.setText(String.format(Locale.getDefault(), "%.1fm", avgDuration));
@@ -75,7 +82,7 @@ public class StatsFragment extends Fragment {
                                 } catch (Exception ignored) {}
                             }
                             
-                            // Personal Records (S039)
+                            // Personal Records
                             llPersonalRecords.removeAllViews();
                             if (prs != null && prs.length() > 0) {
                                 for (int i = 0; i < prs.length(); i++) {
@@ -90,6 +97,7 @@ public class StatsFragment extends Fragment {
                                 TextView tv = new TextView(requireContext());
                                 tv.setText("Log more sets to see PRs!");
                                 tv.setTextColor(0xFF999999);
+                                tv.setPadding(16, 16, 16, 16);
                                 llPersonalRecords.addView(tv);
                             }
                         });
@@ -114,17 +122,20 @@ public class StatsFragment extends Fragment {
         tvLabel.setText(label);
         tvLabel.setTextSize(16f);
         tvLabel.setTypeface(null, android.graphics.Typeface.BOLD);
+        tvLabel.setTextColor(0xFF202124);
         
         tvValue.setText(value);
-        tvValue.setTextColor(0xFF666666);
+        tvValue.setTextColor(0xFF5F6368);
         
         container.addView(row);
     }
 
     private void showError(String message) {
         if (isAdded()) {
-            requireActivity().runOnUiThread(() ->
-                    Toast.makeText(requireContext(), message, Toast.LENGTH_SHORT).show());
+            requireActivity().runOnUiThread(() -> {
+                if (swipeRefresh != null) swipeRefresh.setRefreshing(false);
+                Toast.makeText(requireContext(), message, Toast.LENGTH_SHORT).show();
+            });
         }
     }
 }
