@@ -94,6 +94,22 @@ def list_workouts():
 
     workouts = cursor.fetchall()
 
+    # Enrich each workout with total exercises and total volume
+    for workout in workouts:
+        cursor.execute(
+            """
+            SELECT 
+                COUNT(*) as total_exercises,
+                SUM(COALESCE(weight_kg, 0) * COALESCE(reps, 0) * COALESCE(sets, 0)) as total_volume
+            FROM workout_exercises
+            WHERE workout_id = %s
+            """,
+            (workout["id"],)
+        )
+        stats = cursor.fetchone()
+        workout["total_exercises"] = stats["total_exercises"] or 0
+        workout["total_volume"] = float(stats["total_volume"]) if stats["total_volume"] else 0.0
+
     cursor.close()
     conn.close()
 
